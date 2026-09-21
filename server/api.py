@@ -96,7 +96,13 @@ def _to_laya(name: str, q: Question) -> dict[str, Any]:
 
 
 @app.get("/")
-def index() -> FileResponse:
+def health() -> dict[str, Any]:
+    """Liveness check. Reachable only once the model is loaded, since uvicorn binds after startup."""
+    return {"status": "ok", "model": _model.name, "ui": "/demo"}
+
+
+@app.get("/demo")
+def demo() -> FileResponse:
     return FileResponse(INDEX_HTML, media_type="text/html")
 
 

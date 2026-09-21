@@ -163,8 +163,11 @@ On start it prints every endpoint it serves:
       POST  http://127.0.0.1:8000/v1/systemone     answer questions about a state
 
     Web UI (outside the Jev contract)
-      GET   http://127.0.0.1:8000/                 the demo page
+      GET   http://127.0.0.1:8000/demo             the demo page
       GET   http://127.0.0.1:8000/ui/presets       the five examples (state + questions)
+
+    Health
+      GET   http://127.0.0.1:8000/                 status, and which checkpoint is loaded
 
     For the TypeSafe SDK:
       export TYPESAFE_BASE_URL=http://127.0.0.1:8000
@@ -278,7 +281,7 @@ curl -s http://127.0.0.1:8000/v1/systemone -H 'content-type: application/json' -
 
 ## Web UI
 
-Open <http://127.0.0.1:8000/> with the server running.
+Open <http://127.0.0.1:8000/demo> with the server running.
 
 The left column holds a **Request** panel and an **Examples** panel. Request has two views, toggled
 in its header:
@@ -303,12 +306,16 @@ independent; Laya has no memory. The question set, the current state and the las
 CodeMirror is loaded from esm.sh on demand. If that CDN is unreachable the UI view works normally and
 the JSON view reports `JSON editor unavailable`; nothing else needs a network.
 
-Two routes exist for the UI and are **outside the Jev contract**:
+Two routes serve the UI and are **outside the Jev contract**:
 
 | route | returns |
 |---|---|
-| `GET /` | `index.html` |
+| `GET /demo` | `index.html` |
 | `GET /ui/presets` | the five examples — `triage`, `router`, `moderation`, `guard`, `email` — each `{state, questions}` |
+
+`GET /` is a health check, also outside the Jev contract: `{"status": "ok", "model": "laya", "ui":
+"/demo"}`. It answers only once the model is loaded, because uvicorn binds the socket after the
+startup hook — so a 200 there means the server is ready to decide, not merely running.
 
 ## Using the official clients
 

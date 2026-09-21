@@ -141,8 +141,11 @@ def banner(host: str, port: int, model_name: str) -> str:
             f"      POST  {base}/v1/systemone     answer questions about a state",
             "",
             "    Web UI (outside the Jev contract)",
-            f"      GET   {base}/                 the demo page",
+            f"      GET   {base}/demo             the demo page",
             f"      GET   {base}/ui/presets       the five examples (state + questions)",
+            "",
+            "    Health",
+            f"      GET   {base}/                 status, and which checkpoint is loaded",
             "",
             "    For the TypeSafe SDK:",
             f"      export TYPESAFE_BASE_URL={base}",
@@ -156,11 +159,11 @@ def banner(host: str, port: int, model_name: str) -> str:
 
 def _announce_when_ready(host: str, port: int, model_name: str, open_browser: bool) -> None:
     """uvicorn binds the socket only once the model is loaded, so a 200 here means it is ready."""
-    url = f"http://{host}:{port}/"
+    base = f"http://{host}:{port}"
     deadline = time.monotonic() + 900
     while time.monotonic() < deadline:
         try:
-            urllib.request.urlopen(f"{url}v1/models", timeout=1).close()
+            urllib.request.urlopen(f"{base}/v1/models", timeout=1).close()
             break
         except (urllib.error.URLError, OSError):
             time.sleep(0.5)
@@ -168,7 +171,7 @@ def _announce_when_ready(host: str, port: int, model_name: str, open_browser: bo
         return
     print(banner(host, port, model_name), flush=True)
     if open_browser:
-        webbrowser.open(url)
+        webbrowser.open(f"{base}/demo")
 
 
 def build_parser() -> argparse.ArgumentParser:
