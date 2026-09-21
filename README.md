@@ -164,7 +164,7 @@ On start it prints every endpoint it serves:
 
     Web UI (outside the Jev contract)
       GET   http://127.0.0.1:8000/                 the demo page
-      GET   http://127.0.0.1:8000/ui/presets       Laya's built-in question sets
+      GET   http://127.0.0.1:8000/ui/presets       the five examples (state + questions)
 
     For the TypeSafe SDK:
       export TYPESAFE_BASE_URL=http://127.0.0.1:8000
@@ -206,6 +206,7 @@ uv run python -m uvicorn server.api:app --port 8000   # bare ASGI app, default c
 | `start.sh`, `start.ps1` | thin wrappers: install uv, `uv sync`, hand off to the CLI |
 | `server/cli.py` | the `models` menu, `pull` and `serve`; port binding, browser, startup banner |
 | `server/registry.py` | the checkpoint table and the download / cache / delete helpers |
+| `server/presets.py` | the five examples: Laya's question sets plus a sample state for each |
 | `server/api.py` | FastAPI app: routing, validation, 422 shaping, Jev↔Laya adapting, inference |
 | `server/static/index.html` | the web UI — one file, no build step; the JSON editor pulls CodeMirror from esm.sh at runtime |
 | `pyproject.toml`, `uv.lock` | pinned dependency set |
@@ -287,8 +288,11 @@ in its header:
 - **JSON** — the same request as raw JSON in a CodeMirror editor, with syntax highlighting, folding
   and inline parse errors. Edits round-trip back into the UI view.
 
-**Examples** loads one of Laya's built-in question sets into the editor, ready to modify. Send with
-the **Send** button or ⌘/Ctrl+Enter from the state box.
+**Examples** loads one of five ready-made requests — it fills both the state box and the question
+set, so picking one and pressing Send gives a real answer with nothing to type. The question sets are
+Laya's built-in ones, read live from the installed package; the sample states are this project's,
+since `laya` ships questions only. Edit either afterwards. Send with the **Send** button or
+⌘/Ctrl+Enter from the state box.
 
 The right pane is a log of decisions — each turn sends one *state* and renders a card per question:
 ranked probability bars for `choice`, a legend strip with the expected-value marker for `score`, a
@@ -304,7 +308,7 @@ Two routes exist for the UI and are **outside the Jev contract**:
 | route | returns |
 |---|---|
 | `GET /` | `index.html` |
-| `GET /ui/presets` | Laya's five built-in question sets (`triage`, `router`, `moderation`, `guard`, `email`), read live from the installed `laya` package |
+| `GET /ui/presets` | the five examples — `triage`, `router`, `moderation`, `guard`, `email` — each `{state, questions}` |
 
 ## Using the official clients
 

@@ -142,7 +142,7 @@ def banner(host: str, port: int, model_name: str) -> str:
             "",
             "    Web UI (outside the Jev contract)",
             f"      GET   {base}/                 the demo page",
-            f"      GET   {base}/ui/presets       Laya's built-in question sets",
+            f"      GET   {base}/ui/presets       the five examples (state + questions)",
             "",
             "    For the TypeSafe SDK:",
             f"      export TYPESAFE_BASE_URL={base}",

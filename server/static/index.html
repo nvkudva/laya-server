@@ -91,6 +91,9 @@ main {
 .col-left { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
 .col-left > .panel { height: auto; min-height: 0; }
 .col-left > .panel:first-child { flex: 1 1 auto; }
+/* .panel-body's 220px floor would push the actions and the send bar out of the panel's clipped
+   box on a short viewport, leaving Send unclickable. Let the body shrink and scroll instead. */
+.col-left > .panel:first-child > .panel-body { min-height: 0; }
 .panel.examples { flex: none; }
 .panel.examples .panel-body {
   flex: none; min-height: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px;
@@ -277,7 +280,7 @@ footer a { color: var(--signal); }
     <section class="panel examples">
       <div class="panel-head"><h2>Examples</h2></div>
       <div class="panel-body">
-        <label for="preset">Load one of Laya's built-in question sets, then edit it.</label>
+        <label for="preset">Load a built-in question set with a sample state, then edit either.</label>
         <select id="preset"><option value="">choose an example…</option></select>
       </div>
     </section>
@@ -513,6 +516,14 @@ function buildQuestions({ strict = true } = {}) {
   return out;
 }
 
+/** Load a named example: its sample state into the textarea, its questions into the editor. */
+function adoptExample(example) {
+  stateBox.value = example.state;
+  store.set("laya.state", example.state);
+  // adoptPreset re-renders, which refreshes the JSON pane from the new state when it is showing.
+  adoptPreset(example.questions);
+}
+
 /** Server preset (already Jev-shaped) → editor rows. */
 function adoptPreset(set) {
   questions = Object.entries(set).map(([name, q]) => ({
@@ -726,7 +737,7 @@ renderLog();
 fetch("/ui/presets").then((r) => r.json()).then((presets) => {
   const sel = $("#preset");
   for (const name of Object.keys(presets)) sel.append(el("option", { value: name }, name));
-  sel.onchange = () => { if (sel.value) adoptPreset(presets[sel.value]); sel.value = ""; };
+  sel.onchange = () => { if (sel.value) adoptExample(presets[sel.value]); sel.value = ""; };
 }).catch(() => {});
 </script>
 

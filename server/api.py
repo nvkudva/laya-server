@@ -12,6 +12,7 @@ from fastapi import Body, FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
+from .presets import examples
 from .registry import DEFAULT_MODEL, Model, download, resolve
 
 INDEX_HTML = Path(__file__).resolve().parent / "static" / "index.html"
@@ -101,13 +102,7 @@ def index() -> FileResponse:
 
 @app.get("/ui/presets")
 def ui_presets() -> dict[str, Any]:
-    return {
-        "triage": laya.triage_questions(),
-        "router": laya.router_questions(),
-        "moderation": laya.moderation_questions(),
-        "guard": laya.guard_questions(),
-        "email": laya.email_questions(),
-    }
+    return examples()
 
 
 @app.get("/v1/models")
