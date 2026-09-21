@@ -5,117 +5,263 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Laya · decision playground</title>
 <style>
-  :root {
-    --bg: #0e0f13; --panel: #16181f; --edge: #262a35; --fg: #e6e8ee; --dim: #8b93a7;
-    --accent: #6ea8fe; --good: #4ec9a0; --warn: #e5c07b; --bad: #e06c75;
-    --radius: 10px;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; height: 100vh; display: flex; background: var(--bg); color: var(--fg);
-    font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  }
-  button, input, textarea, select {
-    font: inherit; color: inherit; background: var(--panel);
-    border: 1px solid var(--edge); border-radius: 6px; padding: 6px 8px;
-  }
-  button { cursor: pointer; }
-  button:hover { border-color: var(--accent); }
-  button.primary { background: var(--accent); color: #07111f; border-color: var(--accent); font-weight: 600; }
-  textarea { resize: vertical; width: 100%; }
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap");
 
-  /* ---- left pane: question set editor ---- */
-  #editor {
-    width: 380px; flex: none; border-right: 1px solid var(--edge);
-    display: flex; flex-direction: column; overflow: hidden;
+:root {
+  --paper: #eceef0;
+  --surface: #ffffff;
+  --ink: #14181c;
+  --muted: #5f6a72;
+  --rule: #c9ced3;
+  --rule-strong: #14181c;
+  --signal: #1d5fd4;
+  --chart: #1d5fd4;
+  --track: #dfe3e6;
+  --warn: #8a5a10;
+  --warn-bg: #f6ecd8;
+  --sans: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #14181c; --surface: #1a1f24; --ink: #e4e8ea; --muted: #8d979e;
+    --rule: #2c343a; --rule-strong: #4a555d; --signal: #6ea0ff; --chart: #4a86f0;
+    --track: #262e35; --warn: #e0ae5c; --warn-bg: #2b2415;
   }
-  #editor header, #editor footer { padding: 12px; border-bottom: 1px solid var(--edge); }
-  #editor footer { border-bottom: none; border-top: 1px solid var(--edge); }
-  #editor h1 { margin: 0 0 8px; font-size: 15px; letter-spacing: .02em; }
-  #questions { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
-  .q {
-    border: 1px solid var(--edge); border-radius: var(--radius);
-    background: var(--panel); padding: 10px; display: flex; flex-direction: column; gap: 6px;
-  }
-  .q .row { display: flex; gap: 6px; align-items: center; }
-  .q .row input[name=name] { flex: 1; font-family: ui-monospace, monospace; }
-  .q textarea { min-height: 42px; }
-  .q label { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; }
-  .crit { display: flex; gap: 6px; }
-  .crit input { flex: 1; }
-  .crit input.label { flex: 0 0 34%; font-family: ui-monospace, monospace; }
-  .x { flex: none; padding: 4px 8px; color: var(--dim); }
-  .x:hover { color: var(--bad); border-color: var(--bad); }
-  .toolbar { display: flex; gap: 6px; flex-wrap: wrap; }
+}
+:root[data-theme="dark"] {
+  --paper: #14181c; --surface: #1a1f24; --ink: #e4e8ea; --muted: #8d979e;
+  --rule: #2c343a; --rule-strong: #4a555d; --signal: #6ea0ff; --chart: #4a86f0;
+  --track: #262e35; --warn: #e0ae5c; --warn-bg: #2b2415;
+}
 
-  /* ---- right pane: conversation ---- */
-  #chat { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-  #log { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 20px; }
-  #log .empty { color: var(--dim); margin: auto; text-align: center; max-width: 380px; }
-  .turn { display: flex; flex-direction: column; gap: 12px; max-width: 760px; width: 100%; align-self: center; }
-  .state {
-    align-self: flex-end; max-width: 80%; background: #1e2a3d; border: 1px solid #2c3d59;
-    padding: 10px 14px; border-radius: var(--radius); white-space: pre-wrap;
-  }
-  .answers { display: flex; flex-direction: column; gap: 10px; }
-  .card { border: 1px solid var(--edge); border-radius: var(--radius); background: var(--panel); padding: 12px; }
-  .card h3 { margin: 0 0 2px; font-size: 13px; font-family: ui-monospace, monospace; }
-  .card .instr { color: var(--dim); font-size: 12px; margin-bottom: 8px; }
-  .badge { float: right; font-size: 11px; color: var(--dim); font-family: ui-monospace, monospace; }
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font-family: var(--sans); font-size: 14px; line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+.shell { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 
-  .bar { display: grid; grid-template-columns: 34% 1fr 52px; gap: 8px; align-items: center; margin-top: 4px; font-size: 12px; }
-  .bar .track { height: 8px; background: #20242e; border-radius: 4px; overflow: hidden; }
-  .bar .fill { height: 100%; background: var(--accent); }
-  .bar.top .fill { background: var(--good); }
-  .bar .pct { text-align: right; color: var(--dim); font-family: ui-monospace, monospace; }
-  .bar .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* --- instrument bar ----------------------------------------------------- */
+.bar { flex: none; border-bottom: 1px solid var(--rule); background: var(--surface); padding: 14px 16px 12px; }
+.bar-inner { max-width: 1680px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 20px 32px; align-items: baseline; }
+.bar-head { flex: 1 1 720px; min-width: 0; }
+.wordmark { font-weight: 600; font-size: 19px; letter-spacing: -0.015em; margin: 0; }
+.tagline { color: var(--muted); font-size: 13px; max-width: 118ch; margin: 4px 0 0; line-height: 1.55; }
+.tagline a { color: var(--signal); }
+.tagline b { font-family: var(--mono); font-weight: 400; color: var(--ink); }
+.bar-aside { margin-left: auto; }
+.readout { display: flex; gap: 22px; margin: 0; align-items: flex-start; }
+.readout div { display: flex; flex-direction: column; gap: 1px; }
+.readout dt { color: var(--muted); font-size: 11px; }
+.readout dd { margin: 0; font-family: var(--mono); font-size: 13px; font-variant-numeric: tabular-nums; }
 
-  .gauge { position: relative; height: 10px; background: #20242e; border-radius: 5px; overflow: hidden; margin-top: 6px; }
-  .gauge .fill { height: 100%; }
-  .scale { position: relative; height: 26px; margin-top: 10px; }
-  .scale .tick { position: absolute; top: 12px; transform: translateX(-50%); font-size: 11px; color: var(--dim); }
-  .scale .line { position: absolute; top: 4px; left: 0; right: 0; height: 4px; background: #20242e; border-radius: 2px; }
-  .scale .marker { position: absolute; top: 0; width: 2px; height: 12px; background: var(--good); transform: translateX(-50%); }
-  .legend { font-size: 12px; color: var(--dim); margin-top: 14px; }
+/* --- panels ------------------------------------------------------------- */
+main {
+  flex: 1; min-height: 0; width: 100%; max-width: 1680px; margin: 0 auto; padding: 16px;
+  display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+}
+@media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); } }
+.panel {
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 2px;
+  display: flex; flex-direction: column; min-height: 0; height: 100%; overflow: hidden;
+}
+.panel-head {
+  flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 9px 12px; border-bottom: 1px solid var(--rule);
+}
+.panel-head h2 { margin: 0; font-size: 13px; font-weight: 600; }
+.panel-note { color: var(--muted); font-size: 12px; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.panel-body { flex: 1; min-height: 220px; overflow: auto; }
+.actions { flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border-top: 1px solid var(--rule); }
 
-  .err { border-color: var(--bad); }
-  .err h3 { color: var(--bad); }
-  .err code { font-family: ui-monospace, monospace; color: var(--warn); }
-  .meta { font-size: 11px; color: var(--dim); font-family: ui-monospace, monospace; }
-  .meta .warn { color: var(--warn); }
+/* --- controls ----------------------------------------------------------- */
+button {
+  font: 500 13px var(--sans); color: var(--surface); background: var(--rule-strong);
+  border: 1px solid var(--rule-strong); border-radius: 2px; padding: 7px 14px; cursor: pointer;
+}
+button:hover:not(:disabled) { background: var(--signal); border-color: var(--signal); }
+button:disabled { opacity: 0.45; cursor: default; }
+button:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+/* ghost buttons: the same shape as laya-web's scenario chips */
+button.ghost {
+  font: 400 11.5px var(--mono); padding: 3px 8px;
+  background: transparent; color: var(--muted); border: 1px solid var(--rule);
+}
+button.ghost:hover { background: transparent; color: var(--ink); border-color: var(--rule-strong); }
+input, textarea, select {
+  font: 400 12.5px var(--mono); color: var(--ink); background: var(--surface);
+  border: 1px solid var(--rule); border-radius: 2px; padding: 5px 7px; width: 100%;
+}
+input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--signal); outline-offset: -1px; border-color: var(--signal); }
+input:disabled { color: var(--muted); background: var(--paper); }
+textarea { resize: vertical; font-family: var(--sans); font-size: 13px; }
+select { width: auto; }
 
-  #composer { border-top: 1px solid var(--edge); padding: 12px 24px; display: flex; gap: 10px; align-items: flex-end; }
-  #composer textarea { min-height: 56px; }
-  #composer .side { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+/* --- question set editor ------------------------------------------------ */
+#questions { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.q { border: 1px solid var(--rule); border-radius: 2px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.q .row { display: flex; gap: 6px; align-items: center; }
+.q .row .meta { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.q textarea { min-height: 40px; }
+.q label { font-size: 11px; font-weight: 600; color: var(--muted); }
+.crit { display: flex; gap: 6px; }
+.crit input.label { flex: 0 0 34%; }
+.x { flex: none; }
+.x:hover { color: var(--warn); border-color: var(--warn); }
+
+/* --- conversation ------------------------------------------------------- */
+#log { padding: 16px; display: flex; flex-direction: column; gap: 20px; }
+#log .empty { color: var(--muted); margin: auto; text-align: center; max-width: 42ch; font-size: 13px; }
+.turn { display: flex; flex-direction: column; gap: 10px; }
+.state { background: var(--paper); border: 1px solid var(--rule); border-radius: 2px; padding: 10px 12px; white-space: pre-wrap; }
+.state-label { display: block; font: 600 11px var(--sans); color: var(--muted); margin-bottom: 4px; }
+.answers { border: 1px solid var(--rule); border-radius: 2px; }
+
+/* --- distribution readout ----------------------------------------------- */
+.dist { padding: 12px 12px 10px; border-bottom: 1px solid var(--rule); }
+.dist:last-child { border-bottom: 0; }
+.dist-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.dist-head h3 { margin: 0; font-size: 13px; font-weight: 600; font-family: var(--mono); }
+.dist-type { font-size: 11px; color: var(--muted); }
+.dist-answer { margin-left: auto; font-family: var(--mono); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.dist-instr { color: var(--muted); font-size: 12px; margin-bottom: 9px; }
+
+.bars { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+.bar-row { display: grid; grid-template-columns: minmax(0, auto) minmax(30px, 1fr) 3.4em; align-items: center; gap: 9px; }
+.bar-label { font-family: var(--mono); font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-track { height: 10px; background: var(--track); border-radius: 2px; overflow: hidden; }
+.bar-fill { display: block; height: 100%; background: var(--chart); border-radius: 0 3px 3px 0; }
+.bar-value { font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+.bar-value .pct { opacity: 0.55; }
+.bar-row.is-top .bar-label, .bar-row.is-top .bar-value { color: var(--ink); font-weight: 500; }
+.bar-row:hover .bar-label, .bar-row:hover .bar-value { color: var(--ink); }
+@media (prefers-reduced-motion: no-preference) { .bar-fill { transition: width 220ms cubic-bezier(0.2, 0, 0, 1); } }
+
+.dist-foot { display: flex; align-items: baseline; gap: 4px 14px; margin-top: 8px; font-family: var(--mono); font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.dist-meta { margin-left: auto; display: flex; gap: 14px; white-space: nowrap; }
+.turn-foot { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+.turn-foot .warn { color: var(--warn); }
+
+.notice { margin: 0; padding: 9px 12px; background: var(--warn-bg); color: var(--warn); font-size: 12.5px; }
+.notice h3 { margin: 0 0 4px; font-size: 12.5px; }
+.notice code { font-family: var(--mono); }
+
+/* --- composer ----------------------------------------------------------- */
+#composer { flex: none; display: flex; gap: 10px; align-items: flex-end; padding: 10px 12px; border-top: 1px solid var(--rule); }
+#composer textarea { min-height: 56px; }
+
+/* --- theme toggle, footer ------------------------------------------------ */
+.theme-toggle { margin-left: 12px; font: 400 11px var(--mono); padding: 2px 7px; background: transparent; color: var(--muted); border: 1px solid var(--rule); border-radius: 2px; }
+button.theme-toggle:hover { color: var(--ink); border-color: var(--rule-strong); background: transparent; }
+
+footer { flex: none; border-top: 1px solid var(--rule); background: var(--surface); }
+.footer-inner {
+  max-width: 1680px; margin: 0 auto; padding: 7px 16px 8px;
+  color: var(--muted); font-size: 11.5px; line-height: 1.5;
+  display: flex; flex-wrap: wrap; gap: 2px 26px;
+}
+.credit-group { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 12px; }
+.credit-group h2 { margin: 0; font-size: 11.5px; font-weight: 600; color: var(--ink); }
+.credits { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 14px; }
+.credits li { display: flex; align-items: center; gap: 0 5px; }
+.credits a { font-family: var(--mono); }
+footer a { color: var(--signal); }
+.icon { vertical-align: baseline; flex: none; opacity: 0.8; }
+
+@media (max-width: 900px) {
+  .shell { height: auto; min-height: 100%; }
+  .panel { height: auto; min-height: 58vh; }
+  .readout { flex-wrap: wrap; }
+}
 </style>
 </head>
 <body>
+<div class="shell">
 
-<aside id="editor">
-  <header>
-    <h1>Question set</h1>
-    <div class="toolbar">
+<header class="bar">
+  <div class="bar-inner">
+    <div class="bar-head">
+      <h1 class="wordmark">Laya — System One decision model running locally on your machine</h1>
+      <p class="tagline">
+        It is not a chat model. It is a System One model like
+        <a href="https://typesafe.ai" target="_blank" rel="noreferrer">Jev</a>. You send a
+        state — any text or JSON as information context — and a set of typed questions, and it
+        returns typed answers with calibrated probabilities in a single forward pass. This page
+        talks to a local FastAPI server over the Jev wire API, so nothing leaves your machine.
+        Question types: <b>noul</b> answers true or false, <b>choice</b> picks one named option,
+        <b>score</b> returns the expectation over ordered levels.
+      </p>
+    </div>
+    <div class="bar-aside">
+      <dl class="readout">
+        <div><dt>Checkpoint</dt><dd>ModernBERT-large</dd></div>
+        <div><dt>Served by</dt><dd id="r-model">—</dd></div>
+        <div><dt>Context</dt><dd>512 tok</dd></div>
+        <div><dt>Last run</dt><dd id="r-tokens">—</dd></div>
+        <button class="theme-toggle" id="theme" title="Switch between dark, light and your system setting">system</button>
+      </dl>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Question set <span class="panel-note" id="q-count"></span></h2>
       <select id="preset"><option value="">preset…</option></select>
-      <button id="add-noul">+ noul</button>
-      <button id="add-choice">+ choice</button>
-      <button id="add-score">+ score</button>
     </div>
-  </header>
-  <div id="questions"></div>
-  <footer class="toolbar">
-    <button id="clear-log">Clear conversation</button>
-  </footer>
-</aside>
+    <div class="panel-body"><div id="questions"></div></div>
+    <div class="actions">
+      <button class="ghost" id="add-noul">+ noul</button>
+      <button class="ghost" id="add-choice">+ choice</button>
+      <button class="ghost" id="add-score">+ score</button>
+    </div>
+  </section>
 
-<main id="chat">
-  <div id="log"></div>
-  <form id="composer">
-    <textarea id="state" placeholder="The state to judge — a customer message, a prompt, an email…&#10;⌘/Ctrl+Enter to send"></textarea>
-    <div class="side">
-      <button class="primary" type="submit" id="send">Ask</button>
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Conversation</h2>
+      <button class="ghost" id="clear-log">Clear</button>
     </div>
-  </form>
+    <div class="panel-body"><div id="log"></div></div>
+    <form id="composer">
+      <textarea id="state" placeholder="The state to judge — a customer message, a prompt, an email…&#10;⌘/Ctrl+Enter to send"></textarea>
+      <button type="submit" id="send">Ask</button>
+    </form>
+  </section>
 </main>
+
+<footer>
+  <div class="footer-inner">
+    <section class="credit-group">
+      <h2>Credits</h2>
+      <ul class="credits">
+        <li><svg class="icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 8.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM2.5 14c.8-2.4 2.9-3.8 5.5-3.8s4.7 1.4 5.5 3.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <a href="https://github.com/NandhaKishorM" target="_blank" rel="noreferrer">Nandakishor M</a>
+          <span>Convai Innovations</span></li>
+        <li><svg class="icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 1.8 14 5v6l-6 3.2L2 11V5zM2 5l6 3.2L14 5M8 8.2v6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <a href="https://huggingface.co/convaiinnovations/laya" target="_blank" rel="noreferrer">convaiinnovations/laya</a></li>
+        <li><svg class="icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M2.5 13.5h11M8 13.5V4M4 6.5 8 4l4 2.5M2 10l2-3.5L6 10a2 2 0 0 1-4 0ZM10 10l2-3.5L14 10a2 2 0 0 1-4 0Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noreferrer">Apache 2.0</a></li>
+      </ul>
+    </section>
+    <section class="credit-group">
+      <h2>Source</h2>
+      <ul class="credits">
+        <li><svg class="icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 8.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM2.5 14c.8-2.4 2.9-3.8 5.5-3.8s4.7 1.4 5.5 3.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <a href="https://github.com/nvkudva" target="_blank" rel="noreferrer">nvkudva</a>
+          <span>this server and page</span></li>
+        <li><svg class="icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M9.5 3.5 6 12.5M4.5 5.5 1.5 8l3 2.5M11.5 5.5 14.5 8l-3 2.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <a href="https://github.com/NandhaKishorM/laya" target="_blank" rel="noreferrer">NandhaKishorM/laya</a></li>
+      </ul>
+    </section>
+  </div>
+</footer>
+
+</div>
 
 <script>
 const $ = (s, r = document) => r.querySelector(s);
@@ -133,6 +279,21 @@ const store = {
   get(k, fb) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fb; } catch { return fb; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
+
+// ---- theme ---------------------------------------------------------------
+
+let theme = store.get("laya.theme", "system");
+function applyTheme() {
+  if (theme === "system") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.setAttribute("data-theme", theme);
+  $("#theme").textContent = theme;
+}
+$("#theme").onclick = () => {
+  theme = theme === "dark" ? "light" : theme === "light" ? "system" : "dark";
+  store.set("laya.theme", theme);
+  applyTheme();
+};
+applyTheme();
 
 // ---- question set editor -------------------------------------------------
 
@@ -163,7 +324,7 @@ function renderEditor() {
       el("input", { name: "name", placeholder: "question_name", value: q.name,
         oninput: (e) => { q.name = e.target.value; save(); } }),
       el("span", { class: "meta" }, q.type),
-      el("button", { class: "x", type: "button",
+      el("button", { class: "ghost x", type: "button",
         onclick: () => { questions.splice(i, 1); save(); renderEditor(); } }, "✕"));
 
     const instr = el("textarea", { placeholder: "instructions" });
@@ -180,10 +341,10 @@ function renderEditor() {
             oninput: (e) => { pair[0] = e.target.value; save(); } }),
           el("input", { placeholder: "description (optional)", value: pair[1] ?? "",
             oninput: (e) => { pair[1] = e.target.value; save(); } }),
-          el("button", { class: "x", type: "button",
+          el("button", { class: "ghost x", type: "button",
             onclick: () => { q.criteria.splice(j, 1); save(); renderEditor(); } }, "✕")));
       });
-      parts.push(el("button", { type: "button",
+      parts.push(el("button", { class: "ghost", type: "button",
         onclick: () => { q.criteria.push(["", ""]); save(); renderEditor(); } }, "+ option"));
     } else if (q.type === "score") {
       parts.push(el("label", {}, "criteria — lowest rung first"));
@@ -191,10 +352,10 @@ function renderEditor() {
         parts.push(el("div", { class: "crit" },
           el("input", { placeholder: `rung ${j}`, value: rung,
             oninput: (e) => { q.criteria[j] = e.target.value; save(); } }),
-          el("button", { class: "x", type: "button",
+          el("button", { class: "ghost x", type: "button",
             onclick: () => { q.criteria.splice(j, 1); save(); renderEditor(); } }, "✕")));
       });
-      parts.push(el("button", { type: "button",
+      parts.push(el("button", { class: "ghost", type: "button",
         onclick: () => { q.criteria.push(""); save(); renderEditor(); } }, "+ rung"));
     } else {
       parts.push(el("label", {}, "criteria (optional)"));
@@ -210,6 +371,7 @@ function renderEditor() {
     }
     return el("div", { class: "q" }, parts);
   }));
+  $("#q-count").textContent = `${questions.length} question${questions.length === 1 ? "" : "s"}`;
 }
 
 /** Editor rows → the Jev `questions` object. Throws on user error. */
@@ -259,77 +421,66 @@ function adoptPreset(set) {
 }
 
 // ---- rendering answers ---------------------------------------------------
+// One question's answer is one distribution: a single fill on a neutral track,
+// no legend, rank carried by ink weight. Same readout for all three types.
 
-const pct = (p) => `${(p * 100).toFixed(1)}%`;
-const lerp = (p) => `hsl(${(1 - p) * 140} 60% 50%)`;
+const pct = (p) => (p * 100 >= 9.95 ? (p * 100).toFixed(0) : (p * 100).toFixed(1));
 
-function cardHead(name, q, confidence) {
-  return [
-    confidence == null ? null : el("span", { class: "badge" }, `confidence ${confidence.toFixed(3)}`),
-    el("h3", {}, name),
-    q?.instructions ? el("div", { class: "instr" }, q.instructions) : null,
-  ];
+function rowsFor(a) {
+  if (a.type === "noul") {
+    const p = a.noul ?? 0;
+    return [{ label: "false", p: 1 - p }, { label: "true", p }];
+  }
+  const probs = Object.entries(a.probabilities ?? {});
+  if (a.type === "score") {
+    const legend = a.legend ?? {};
+    return probs.map(([k, p]) => ({ label: `${k} ${legend[k] ?? ""}`.trim(), p }));
+  }
+  return probs.map(([label, p]) => ({ label, p }));
 }
 
-function renderChoice(name, q, a) {
-  const entries = Object.entries(a.probabilities ?? {}).sort((x, y) => y[1] - x[1]);
-  return el("div", { class: "card" },
-    cardHead(name, q, a.confidence),
-    entries.map(([label, p], i) =>
-      el("div", { class: i === 0 ? "bar top" : "bar" },
-        el("span", { class: "lbl", title: label }, label),
-        el("span", { class: "track" }, el("span", { class: "fill", style: `width:${p * 100}%` })),
-        el("span", { class: "pct" }, pct(p)))));
+function summaryFor(a) {
+  if (a.type === "noul") return (a.noul ?? 0).toFixed(4);
+  if (a.type === "score") return (a.score ?? 0).toFixed(2);
+  return a.choice ?? "";
 }
 
-function renderScore(name, q, a) {
-  const legend = a.legend ?? {};
-  const rungs = Object.keys(legend).map(Number).sort((x, y) => x - y);
-  const max = Math.max(1, rungs.length - 1);
-  return el("div", { class: "card" },
-    cardHead(name, q, a.confidence),
-    el("div", { class: "meta" }, `score ${a.score?.toFixed(3)} of ${max}`),
-    el("div", { class: "scale" },
-      el("span", { class: "line" }),
-      el("span", { class: "marker", style: `left:${(a.score / max) * 100}%` }),
-      rungs.map((r) => el("span", { class: "tick", style: `left:${(r / max) * 100}%` }, String(r)))),
-    el("div", { class: "legend" },
-      rungs.map((r) => el("div", {}, `${r} — ${legend[r]}`))));
-}
-
-function renderNoul(name, q, a) {
-  const p = a.noul ?? 0;
-  return el("div", { class: "card" },
-    cardHead(name, q, a.confidence),
-    el("div", { class: "meta" }, `${p >= 0.5 ? "yes" : "no"} · ${pct(p)}`),
-    el("div", { class: "gauge" },
-      el("span", { class: "fill", style: `width:${p * 100}%; background:${lerp(p)}` })));
+function renderAnswer(name, q, a) {
+  const data = rowsFor(a);
+  const winner = data.reduce((best, r, i) => (r.p > data[best].p ? i : best), 0);
+  const act = a.action?.act_probability ?? a.rl_agent?.act_probability;
+  return el("section", { class: "dist" },
+    el("header", { class: "dist-head" },
+      el("h3", {}, name),
+      el("span", { class: "dist-type" }, a.type),
+      el("span", { class: "dist-answer" }, summaryFor(a))),
+    q?.instructions ? el("div", { class: "dist-instr" }, q.instructions) : null,
+    el("ol", { class: "bars" }, data.map((r, i) =>
+      el("li", { class: i === winner ? "bar-row is-top" : "bar-row", title: `${r.label} — ${r.p.toFixed(4)}` },
+        el("span", { class: "bar-label" }, r.label),
+        el("span", { class: "bar-track" },
+          el("span", { class: "bar-fill", style: `width: max(2px, ${r.p * 100}%)` })),
+        el("span", { class: "bar-value" }, pct(r.p), el("span", { class: "pct" }, "%"))))),
+    el("footer", { class: "dist-foot" },
+      el("span", {}, a.type === "score" ? `expectation, ${data.length} levels`
+        : a.type === "noul" ? "p(true)" : `${data.length} options`),
+      el("span", { class: "dist-meta" },
+        a.confidence != null ? el("span", {}, `confidence ${a.confidence.toFixed(3)}`) : null,
+        act != null ? el("span", {}, `act ${act.toFixed(3)}`) : null)));
 }
 
 function renderAnswers(sent, data) {
   const wrap = el("div", { class: "answers" });
-  for (const [name, a] of Object.entries(data.answers ?? {})) {
-    const q = sent[name];
-    const card = a.type === "score" ? renderScore(name, q, a)
-      : a.type === "choice" ? renderChoice(name, q, a)
-      : renderNoul(name, q, a);
-    if (a.action?.act_probability != null) {
-      card.append(el("div", { class: "meta" }, `act_probability ${a.action.act_probability.toFixed(3)}`));
-    }
-    wrap.append(card);
-  }
-  const tokens = data.usage?.input_tokens;
-  wrap.append(el("div", { class: "meta" },
-    el("span", {}, `${data.model} · ${tokens} input tokens`),
-    tokens >= 450 ? el("span", { class: "warn" }, "  ⚠ near the 512-token limit — content may be silently truncated") : null));
+  for (const [name, a] of Object.entries(data.answers ?? {})) wrap.append(renderAnswer(name, sent[name], a));
   return wrap;
 }
 
 function renderError(detail) {
-  return el("div", { class: "card err" },
-    el("h3", {}, "Request rejected"),
-    (Array.isArray(detail) ? detail : [{ loc: [], msg: String(detail) }]).map((d) =>
-      el("div", {}, el("code", {}, (d.loc ?? []).join(".")), ` ${d.msg}`)));
+  return el("div", { class: "answers" },
+    el("div", { class: "notice" },
+      el("h3", {}, "Request rejected"),
+      (Array.isArray(detail) ? detail : [{ loc: [], msg: String(detail) }]).map((d) =>
+        el("div", {}, el("code", {}, (d.loc ?? []).join(".")), ` ${d.msg}`))));
 }
 
 // ---- conversation --------------------------------------------------------
@@ -338,11 +489,19 @@ const log = $("#log");
 let history = store.get("laya.history", []);
 
 function renderTurn(turn) {
+  const tokens = turn.data?.usage?.input_tokens;
   const node = el("div", { class: "turn" },
-    el("div", { class: "state" }, turn.state),
-    turn.error ? renderError(turn.error) : renderAnswers(turn.sent, turn.data));
+    el("div", { class: "state" }, el("span", { class: "state-label" }, "State"), turn.state),
+    turn.error ? renderError(turn.error) : renderAnswers(turn.sent, turn.data),
+    turn.error ? null : el("div", { class: "turn-foot" },
+      el("span", {}, `${turn.data.model} · ${tokens} input tokens`),
+      tokens >= 450 ? el("span", { class: "warn" }, "  ⚠ near the 512-token limit — content may be silently truncated") : null));
   log.append(node);
-  log.scrollTop = log.scrollHeight;
+  log.parentElement.scrollTop = log.parentElement.scrollHeight;
+  if (turn.data) {
+    $("#r-model").textContent = turn.data.model;
+    $("#r-tokens").textContent = `${tokens} tok`;
+  }
 }
 
 function renderLog() {
@@ -365,10 +524,10 @@ async function ask(state) {
     return renderTurn({ state, error: e.message });
   }
   const pendingNode = el("div", { class: "turn" },
-    el("div", { class: "state" }, state),
-    el("div", { class: "meta" }, "thinking…"));
+    el("div", { class: "state" }, el("span", { class: "state-label" }, "State"), state),
+    el("div", { class: "turn-foot" }, "thinking…"));
   log.append(pendingNode);
-  log.scrollTop = log.scrollHeight;
+  log.parentElement.scrollTop = log.parentElement.scrollHeight;
 
   let turn;
   try {
