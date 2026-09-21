@@ -23,7 +23,15 @@ the real work is in the `laya-server` CLI, so every platform takes the same code
 behaviour is `serve`: download the weights if needed, start on the first free port from 8000, open
 the UI. Ctrl-C stops it.
 
-Any CLI arguments pass straight through — `./start.sh models list`, `./start.sh serve --port 9000`.
+Any CLI arguments pass straight through, so the wrapper is also how you manage models:
+
+```sh
+./start.sh models list                            # what is available, what is cached
+./start.sh models pull laya-typed-decisions       # download another checkpoint
+./start.sh serve --model laya-typed-decisions     # run it instead of the default
+```
+
+See [Models](#models) for the full list and what each one is for.
 
 ## CLI
 
@@ -38,7 +46,7 @@ a free port), `--no-ui` (API only), `--no-browser`, `--log-level`.
 
 ## Models
 
-One checkpoint per process, picked with `--model`; `/v1/models` reports whichever is loaded.
+Three checkpoints are available. One is loaded per process, chosen at start time.
 
 | name | encoder | context | download | use it for |
 |---|---|---|---|---|
@@ -46,18 +54,88 @@ One checkpoint per process, picked with `--model`; `/v1/models` reports whicheve
 | `laya-multilingual` | mmBERT-base | 1024 | 678 MB | 100+ languages |
 | `laya-typed-decisions` | ModernBERT-large | 1024 | 846 MB | agent traces, customer service, invoices, security incidents |
 
+### See what you have
+
 ```sh
-uv run laya-server serve --model laya-typed-decisions
+./start.sh models list
 ```
 
-Stock Jev clients hard-code `model: "laya"`, so that value is accepted as an alias for whichever
-checkpoint is loaded. Any other name is a 422.
+```
+  laya                   cached   512 tok  English, general purpose (default)
+  laya-multilingual      678 MB  1024 tok  100+ languages
+  laya-typed-decisions   846 MB  1024 tok  Agent traces, customer service, invoices, security incidents
+```
 
-Adding a checkpoint is one entry in `laya_server/registry.py`.
+`cached` means the weights are already on disk; a size means that is what downloading will cost.
 
-First run pulls ~810 MB and takes a few minutes. Later runs touch no network — the server resolves
-the cached snapshot with `local_files_only` and prints `==> Using model at <path>` — so startup is
-just the ~800 MB read into RAM.
+### Download one
+
+```sh
+./start.sh models pull laya-typed-decisions      # one checkpoint
+./start.sh models pull laya laya-multilingual    # several
+./start.sh models pull                           # all three, ~2.4 GB
+```
+
+```
+==> Downloading convaiinnovations/laya-typed-decisions (~846 MB, one time)
+==> Cached at /Users/you/.cache/huggingface/hub/models--convaiinnovations--laya-typed-decisions/snapshots/...
+```
+
+Pulling ahead of time is optional — `serve` downloads whatever it needs. It is useful for warming a
+machine before a demo, or for downloading on a fast network and running somewhere else.
+
+### Switch the model
+
+```sh
+./start.sh serve --model laya-typed-decisions
+```
+
+That is the whole switch: stop the server, start it again with a different `--model`. Nothing is
+cached per project and nothing needs re-syncing, so flipping back is another restart. Check which
+one is running with:
+
+```sh
+curl -s http://127.0.0.1:8000/v1/models
+```
+
+```json
+{"models": [{"name": "laya-typed-decisions",
+             "description": "Agent traces, customer service, invoices, security incidents (ModernBERT-large, 1024-token context).",
+             "release_date": "2026-01-01"}]}
+```
+
+To run two checkpoints side by side, start two servers on different ports:
+
+```sh
+./start.sh serve --model laya --port 8000 --no-browser &
+./start.sh serve --model laya-typed-decisions --port 8001 --no-browser &
+```
+
+### Client compatibility
+
+Stock Jev clients hard-code `model: "laya"` in the request body, so that value is accepted as an
+alias for whichever checkpoint is loaded — the SDK keeps working after a switch. The loaded
+checkpoint's own name is also accepted. Any other name is a 422.
+
+### Adding a checkpoint
+
+One entry in `laya_server/registry.py`:
+
+```python
+Model("my-laya", "myorg/my-laya", "ModernBERT-large", 1024, 846, "what it is good at"),
+```
+
+It then shows up in `models list`, `models pull` and `serve --model`. The repo must have the same
+layout as the official ones (`rl_agent_config.json`, `model.safetensors`, `tokenizer/`, `encoder/`).
+
+## Startup
+
+First run downloads the checkpoint and takes a few minutes. Later runs touch no network — weights
+resolve from the cache with `local_files_only` — so startup is just the read into RAM:
+
+```
+==> Loading laya (846 MB) into memory
+```
 
 On start it prints every endpoint it serves:
 
