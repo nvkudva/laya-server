@@ -12,5 +12,4 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
 Write-Host "==> Setting up Python 3.12 and dependencies"
 uv sync --quiet
 
-$cliArgs = if ($args.Count -gt 0) { $args } else { @("serve") }
-uv run laya-server @cliArgs
+uv run laya-server @args

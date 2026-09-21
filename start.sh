@@ -16,4 +16,4 @@ fi
 echo "==> Setting up Python 3.12 and dependencies"
 uv sync --quiet
 
-exec uv run laya-server "${@:-serve}"
+exec uv run laya-server "$@"

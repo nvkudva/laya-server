@@ -55,8 +55,6 @@ app = FastAPI(title="Laya System One", version="0.2.0")
 _lock = threading.Lock()
 _agent = None
 _model: Model = resolve(DEFAULT_MODEL)
-# The two UI routes live outside the Jev contract; `serve --no-ui` turns them off.
-serve_ui = True
 
 
 def use_model(model: Model) -> None:
@@ -95,21 +93,13 @@ def _to_laya(name: str, q: Question) -> dict[str, Any]:
     return out
 
 
-def _ui_disabled() -> JSONResponse:
-    return JSONResponse(status_code=404, content={"detail": "UI disabled (--no-ui)"})
-
-
 @app.get("/")
-def index() -> Any:
-    if not serve_ui:
-        return _ui_disabled()
+def index() -> FileResponse:
     return FileResponse(INDEX_HTML, media_type="text/html")
 
 
 @app.get("/ui/presets")
-def ui_presets() -> Any:
-    if not serve_ui:
-        return _ui_disabled()
+def ui_presets() -> dict[str, Any]:
     return {
         "triage": laya.triage_questions(),
         "router": laya.router_questions(),

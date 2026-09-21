@@ -23,12 +23,11 @@ the real work is in the `laya-server` CLI, so every platform takes the same code
 behaviour is `serve`: download the weights if needed, start on the first free port from 8000, open
 the UI. Ctrl-C stops it.
 
-Any CLI arguments pass straight through, so the wrapper is also how you manage models:
+Any CLI arguments pass straight through, so the wrapper is also how you pick a model:
 
 ```sh
-./start.sh models list                            # what is available, what is cached
-./start.sh models pull laya-typed-decisions       # download another checkpoint
-./start.sh serve --model laya-typed-decisions     # run it instead of the default
+./start.sh models                            # menu: choose a checkpoint, it downloads and starts
+./start.sh serve laya-typed-decisions        # skip the menu, run one directly
 ```
 
 See [Models](#models) for the full list and what each one is for.
@@ -36,13 +35,15 @@ See [Models](#models) for the full list and what each one is for.
 ## CLI
 
 ```sh
-uv run laya-server models list              # every checkpoint, and whether it is cached
-uv run laya-server models pull <name>...    # download ahead of time (no name = all)
-uv run laya-server serve [options]          # run the server
+laya-server                      # serve the default checkpoint
+laya-server models               # menu: pick a checkpoint, or delete downloaded ones
+laya-server serve [model]        # serve a named checkpoint
+laya-server pull [model...]      # download without starting (no name = all)
 ```
 
-`serve` options: `--model <name>`, `--host`, `--port`, `--fixed-port` (fail instead of scanning for
-a free port), `--no-ui` (API only), `--no-browser`, `--log-level`.
+Three options, shared by all of them: `--host` (default `127.0.0.1`), `--port` (default: the first
+free port from 8000) and `--no-browser`. An explicit `--port` is used as given — if it is busy the
+command fails immediately rather than drifting to another port.
 
 ## Models
 
@@ -54,45 +55,38 @@ Three checkpoints are available. One is loaded per process, chosen at start time
 | `laya-multilingual` | mmBERT-base | 1024 | 678 MB | 100+ languages |
 | `laya-typed-decisions` | ModernBERT-large | 1024 | 846 MB | agent traces, customer service, invoices, security incidents |
 
-### See what you have
+### Pick one interactively
 
 ```sh
-./start.sh models list
+./start.sh models
 ```
 
 ```
-  laya                   cached   512 tok  English, general purpose (default)
-  laya-multilingual      678 MB  1024 tok  100+ languages
-  laya-typed-decisions   846 MB  1024 tok  Agent traces, customer service, invoices, security incidents
+Laya checkpoints
+
+  1  laya                   cached   512 tok  English, general purpose (default)
+  2  laya-multilingual      678 MB  1024 tok  100+ languages
+  3  laya-typed-decisions   cached  1024 tok  Agent traces, customer service, invoices, security incidents
+
+  4  delete all downloaded checkpoints
+  q  quit
+
+Select [1-4, q]:
 ```
 
-`cached` means the weights are already on disk; a size means that is what downloading will cost.
+`cached` means the weights are already on disk; a size is what downloading will cost. Pick a number
+and it downloads if needed, then starts the server — one step, no separate pull.
 
-### Download one
+Piped or run from a script, `models` prints the same table and exits instead of prompting.
+
+### Or name it directly
 
 ```sh
-./start.sh models pull laya-typed-decisions      # one checkpoint
-./start.sh models pull laya laya-multilingual    # several
-./start.sh models pull                           # all three, ~2.4 GB
+./start.sh serve laya-typed-decisions
 ```
 
-```
-==> Downloading convaiinnovations/laya-typed-decisions (~846 MB, one time)
-==> Cached at /Users/you/.cache/huggingface/hub/models--convaiinnovations--laya-typed-decisions/snapshots/...
-```
-
-Pulling ahead of time is optional — `serve` downloads whatever it needs. It is useful for warming a
-machine before a demo, or for downloading on a fast network and running somewhere else.
-
-### Switch the model
-
-```sh
-./start.sh serve --model laya-typed-decisions
-```
-
-That is the whole switch: stop the server, start it again with a different `--model`. Nothing is
-cached per project and nothing needs re-syncing, so flipping back is another restart. Check which
-one is running with:
+Switching is just that: stop the server, start it again with a different name. Nothing is cached per
+project and nothing needs re-syncing. Check which one is running with:
 
 ```sh
 curl -s http://127.0.0.1:8000/v1/models
@@ -107,9 +101,31 @@ curl -s http://127.0.0.1:8000/v1/models
 To run two checkpoints side by side, start two servers on different ports:
 
 ```sh
-./start.sh serve --model laya --port 8000 --no-browser &
-./start.sh serve --model laya-typed-decisions --port 8001 --no-browser &
+./start.sh serve laya --port 8000 --no-browser &
+./start.sh serve laya-typed-decisions --port 8001 --no-browser &
 ```
+
+### Download without starting
+
+```sh
+./start.sh pull laya-typed-decisions      # one
+./start.sh pull laya laya-multilingual    # several
+./start.sh pull                           # all three, ~2.4 GB
+```
+
+```
+==> Downloading convaiinnovations/laya-typed-decisions (~846 MB, one time)
+==> Cached at /Users/you/.cache/huggingface/hub/models--convaiinnovations--laya-typed-decisions/snapshots/...
+```
+
+Optional — `serve` and the menu both download on demand. Useful for warming a machine before a demo,
+or downloading on a fast network and running elsewhere.
+
+### Deleting checkpoints
+
+Option 4 in the menu removes every downloaded Laya checkpoint. It lists what will go and requires
+typing `yes`, because the weights live in the **shared** Hugging Face cache — any other project on
+the machine using the same repos will re-download them.
 
 ### Client compatibility
 
@@ -125,7 +141,7 @@ One entry in `laya_server/registry.py`:
 Model("my-laya", "myorg/my-laya", "ModernBERT-large", 1024, 846, "what it is good at"),
 ```
 
-It then shows up in `models list`, `models pull` and `serve --model`. The repo must have the same
+It then shows up in the `models` menu, in `pull` and in `serve <name>`. The repo must have the same
 layout as the official ones (`rl_agent_config.json`, `model.safetensors`, `tokenizer/`, `encoder/`).
 
 ## Startup
@@ -156,8 +172,8 @@ On start it prints every endpoint it serves:
 ```
 
 There is **one server and one port** — the UI and the API are routes on the same FastAPI process, so
-the UI needs no CORS and no second address. `--no-ui` drops the two UI routes if you want the API
-alone; `--host 0.0.0.0` exposes it on the LAN instead of loopback only.
+the UI needs no CORS and no second address. `--host 0.0.0.0` exposes it on the LAN instead of
+loopback only.
 
 ## Model weights
 
@@ -188,8 +204,8 @@ uv run python -m uvicorn laya_server.api:app --port 8000   # bare ASGI app, defa
 | file | role |
 |---|---|
 | `start.sh`, `start.ps1` | thin wrappers: install uv, `uv sync`, hand off to the CLI |
-| `laya_server/cli.py` | `models list` / `models pull` / `serve`, port scan, browser, startup banner |
-| `laya_server/registry.py` | the checkpoint table and the download/cache helpers |
+| `laya_server/cli.py` | the `models` menu, `pull` and `serve`; port binding, browser, startup banner |
+| `laya_server/registry.py` | the checkpoint table and the download / cache / delete helpers |
 | `laya_server/api.py` | FastAPI app: routing, validation, 422 shaping, Jev↔Laya adapting, inference |
 | `laya_server/static/index.html` | the web UI — one file, no build step; the JSON editor pulls CodeMirror from esm.sh at runtime |
 | `pyproject.toml`, `uv.lock` | pinned dependency set |
