@@ -538,8 +538,7 @@ function adoptPreset(set) {
 
 let qView = store.get("laya.qview", "ui");
 
-/** JSON view text → editor rows. Shows the error and returns false when the text isn't a set. */
-/** JSON view → the sidebar's fields. */
+/** JSON view text → the sidebar's fields. Shows the error and returns false when it isn't a request. */
 function applyJsonView() {
   try {
     const body = JSON.parse(jsonPane.read());

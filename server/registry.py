@@ -19,13 +19,22 @@ class Model:
     context: int
     size_mb: int
     description: str
+    released: str  # the Hub repo's creation date, reported as `release_date` by /v1/models
 
 
 MODELS: dict[str, Model] = {
     m.name: m
     for m in (
-        Model("laya", "convaiinnovations/laya", "ModernBERT-large", 512, 846, "English, general purpose"),
-        Model("laya-multilingual", "convaiinnovations/laya-multilingual", "mmBERT-base", 1024, 678, "100+ languages"),
+        Model("laya", "convaiinnovations/laya", "ModernBERT-large", 512, 846, "English, general purpose", "2026-09-18"),
+        Model(
+            "laya-multilingual",
+            "convaiinnovations/laya-multilingual",
+            "mmBERT-base",
+            1024,
+            678,
+            "100+ languages",
+            "2026-09-19",
+        ),
         Model(
             "laya-typed-decisions",
             "convaiinnovations/laya-typed-decisions",
@@ -33,6 +42,7 @@ MODELS: dict[str, Model] = {
             1024,
             846,
             "Agent traces, customer service, invoices, security incidents",
+            "2026-09-18",
         ),
     )
 }

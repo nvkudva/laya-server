@@ -1,6 +1,11 @@
+import os
+
 from typesafe_sdk import TypeSafeClient, Choice, Noul, Score
 
-c = TypeSafeClient(api_key="local", base_url="http://127.0.0.1:8000")
+c = TypeSafeClient(
+    api_key=os.environ.get("TYPESAFE_API_KEY", "local"),
+    base_url=os.environ.get("TYPESAFE_BASE_URL", "http://127.0.0.1:8000"),
+)
 r = c.system_one(
     state="I was charged twice for the same order and nobody answers my emails. I want my money back now.",
     questions={

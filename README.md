@@ -95,7 +95,7 @@ curl -s http://127.0.0.1:8000/v1/models
 ```json
 {"models": [{"name": "laya-typed-decisions",
              "description": "Agent traces, customer service, invoices, security incidents (ModernBERT-large, 1024-token context).",
-             "release_date": "2026-01-01"}]}
+             "release_date": "2026-09-18"}]}
 ```
 
 To run two checkpoints side by side, start two servers on different ports:
@@ -222,7 +222,7 @@ Mirrors `https://api.typesafe.ai` v0.2.0. An `Authorization: Bearer <key>` heade
 ### `GET /v1/models`
 
 ```json
-{"models": [{"name": "laya", "description": "...", "release_date": "2026-01-01"}]}
+{"models": [{"name": "laya", "description": "...", "release_date": "2026-09-18"}]}
 ```
 
 ### `POST /v1/systemone`

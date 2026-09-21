@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from importlib.metadata import version
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -53,10 +55,19 @@ class SystemOneRequest(BaseModel):
     questions: dict[str, Question] = Field(min_length=1)
 
 
-app = FastAPI(title="Laya System One", version=version("laya-server"))
 _lock = threading.Lock()
 _agent = None
 _model: Model = resolve(DEFAULT_MODEL)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    # Load before uvicorn accepts connections, so a reply from any route means ready to decide.
+    agent()
+    yield
+
+
+app = FastAPI(title="Laya System One", version=version("laya-server"), lifespan=lifespan)
 
 
 def use_model(model: Model) -> None:
@@ -70,11 +81,6 @@ def agent():
     if _agent is None:
         _agent = laya.load(download(_model))
     return _agent
-
-
-@app.on_event("startup")
-def _warm() -> None:
-    agent()
 
 
 def _invalid(loc: list[str | int], msg: str, kind: str = "value_error") -> JSONResponse:
@@ -118,7 +124,7 @@ def list_models() -> dict[str, Any]:
             {
                 "name": _model.name,
                 "description": f"{_model.description} ({_model.encoder}, {_model.context}-token context).",
-                "release_date": "2026-01-01",
+                "release_date": _model.released,
             }
         ]
     }
