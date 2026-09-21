@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+from importlib.metadata import version
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -51,7 +52,7 @@ class SystemOneRequest(BaseModel):
     questions: dict[str, Question] = Field(min_length=1)
 
 
-app = FastAPI(title="Laya System One", version="0.2.0")
+app = FastAPI(title="Laya System One", version=version("laya-server"))
 _lock = threading.Lock()
 _agent = None
 _model: Model = resolve(DEFAULT_MODEL)
