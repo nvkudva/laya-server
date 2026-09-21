@@ -9,17 +9,13 @@ from typing import Annotated, Any, Literal
 import laya
 from fastapi import Body, FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
-from huggingface_hub import snapshot_download
 from pydantic import BaseModel, Field
 
-INDEX_HTML = Path(__file__).resolve().parent / "index.html"
+from .registry import DEFAULT_MODEL, Model, download, resolve
+
+INDEX_HTML = Path(__file__).resolve().parent / "static" / "index.html"
 
 JSONContent = str | dict[str, Any] | list[Any]
-
-MODEL_ID = "convaiinnovations/laya"
-MODEL_NAME = "laya"
-# laya.load() would pull the whole 2.2 GB repo; these are the only files it reads (~810 MB).
-MODEL_FILES = ["rl_agent_config.json", "model.safetensors", "tokenizer/*", "encoder/*"]
 
 
 class NoulCriteria(BaseModel):
@@ -50,23 +46,29 @@ Question = Annotated[NoulQuestion | ChoiceQuestion | ScoreQuestion, Field(discri
 
 class SystemOneRequest(BaseModel):
     state: JSONContent
-    model: Literal["laya"] = MODEL_NAME
+    # Stock Jev clients hard-code "laya"; accept it as an alias for whichever checkpoint is loaded.
+    model: str = DEFAULT_MODEL
     questions: dict[str, Question] = Field(min_length=1)
 
 
 app = FastAPI(title="Laya System One", version="0.2.0")
 _lock = threading.Lock()
 _agent = None
+_model: Model = resolve(DEFAULT_MODEL)
+# The two UI routes live outside the Jev contract; `serve --no-ui` turns them off.
+serve_ui = True
 
 
-def model_dir() -> str:
-    return snapshot_download(MODEL_ID, allow_patterns=MODEL_FILES)
+def use_model(model: Model) -> None:
+    """Pick the checkpoint this process serves. Call before startup."""
+    global _model, _agent
+    _model, _agent = model, None
 
 
 def agent():
     global _agent
     if _agent is None:
-        _agent = laya.load(model_dir())
+        _agent = laya.load(download(_model))
     return _agent
 
 
@@ -93,13 +95,21 @@ def _to_laya(name: str, q: Question) -> dict[str, Any]:
     return out
 
 
+def _ui_disabled() -> JSONResponse:
+    return JSONResponse(status_code=404, content={"detail": "UI disabled (--no-ui)"})
+
+
 @app.get("/")
-def index() -> FileResponse:
+def index() -> Any:
+    if not serve_ui:
+        return _ui_disabled()
     return FileResponse(INDEX_HTML, media_type="text/html")
 
 
 @app.get("/ui/presets")
-def ui_presets() -> dict[str, Any]:
+def ui_presets() -> Any:
+    if not serve_ui:
+        return _ui_disabled()
     return {
         "triage": laya.triage_questions(),
         "router": laya.router_questions(),
@@ -113,20 +123,26 @@ def ui_presets() -> dict[str, Any]:
 def list_models() -> dict[str, Any]:
     return {
         "models": [
-            {"name": MODEL_NAME, "description": "Laya decision model (ModernBERT-large).", "release_date": "2026-01-01"},
+            {
+                "name": _model.name,
+                "description": f"{_model.description} ({_model.encoder}, {_model.context}-token context).",
+                "release_date": "2026-01-01",
+            }
         ]
     }
 
 
 @app.post("/v1/systemone")
 def system_one(req: Annotated[SystemOneRequest, Body()]) -> Any:
+    if req.model not in (_model.name, DEFAULT_MODEL):
+        return _invalid(["body", "model"], f"this server serves {_model.name!r}, not {req.model!r}")
     questions = {name: _to_laya(name, q) for name, q in req.questions.items()}
     try:
         with _lock:
             result = agent().system_one(req.state, questions)
     except ValueError as exc:
         return _invalid(["body", "questions"], str(exc))
-    result["model"] = MODEL_NAME
+    result["model"] = _model.name
     return result
 
 
