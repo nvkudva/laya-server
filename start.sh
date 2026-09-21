@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Thin wrapper: make sure uv is available, then hand off to the CLI.
-# Everything else lives in laya_server/cli.py so macOS, Linux and Windows share one code path.
+# Everything else lives in server/cli.py so macOS, Linux and Windows share one code path.
 set -euo pipefail
 
 cd "$(dirname "$0")"

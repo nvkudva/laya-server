@@ -13,7 +13,7 @@ calibrated probability distribution per question from a single forward pass.
 
 ```sh
 git clone <this repo>
-cd laya-local
+cd laya-server
 ./start.sh          # macOS, Linux
 .\start.ps1         # Windows
 ```
@@ -135,7 +135,7 @@ checkpoint's own name is also accepted. Any other name is a 422.
 
 ### Adding a checkpoint
 
-One entry in `laya_server/registry.py`:
+One entry in `server/registry.py`:
 
 ```python
 Model("my-laya", "myorg/my-laya", "ModernBERT-large", 1024, 846, "what it is good at"),
@@ -195,8 +195,8 @@ than a silent stall.
 
 ```sh
 uv sync
-uv run python -m laya_server serve          # same as the laya-server script
-uv run python -m uvicorn laya_server.api:app --port 8000   # bare ASGI app, default checkpoint
+uv run python -m server serve          # same as the laya-server script
+uv run python -m uvicorn server.api:app --port 8000   # bare ASGI app, default checkpoint
 ```
 
 ## Files
@@ -204,10 +204,10 @@ uv run python -m uvicorn laya_server.api:app --port 8000   # bare ASGI app, defa
 | file | role |
 |---|---|
 | `start.sh`, `start.ps1` | thin wrappers: install uv, `uv sync`, hand off to the CLI |
-| `laya_server/cli.py` | the `models` menu, `pull` and `serve`; port binding, browser, startup banner |
-| `laya_server/registry.py` | the checkpoint table and the download / cache / delete helpers |
-| `laya_server/api.py` | FastAPI app: routing, validation, 422 shaping, Jev↔Laya adapting, inference |
-| `laya_server/static/index.html` | the web UI — one file, no build step; the JSON editor pulls CodeMirror from esm.sh at runtime |
+| `server/cli.py` | the `models` menu, `pull` and `serve`; port binding, browser, startup banner |
+| `server/registry.py` | the checkpoint table and the download / cache / delete helpers |
+| `server/api.py` | FastAPI app: routing, validation, 422 shaping, Jev↔Laya adapting, inference |
+| `server/static/index.html` | the web UI — one file, no build step; the JSON editor pulls CodeMirror from esm.sh at runtime |
 | `pyproject.toml`, `uv.lock` | pinned dependency set |
 | `verify_sdk.py` | round-trip check against the real `typesafe-sdk` client |
 

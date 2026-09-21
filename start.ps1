@@ -1,5 +1,5 @@
 # Thin wrapper: make sure uv is available, then hand off to the CLI.
-# Everything else lives in laya_server/cli.py so macOS, Linux and Windows share one code path.
+# Everything else lives in server/cli.py so macOS, Linux and Windows share one code path.
 $ErrorActionPreference = "Stop"
 Set-Location -Path $PSScriptRoot
 
