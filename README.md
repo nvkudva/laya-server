@@ -12,7 +12,7 @@ calibrated probability distribution per question from a single forward pass.
 ## Quick start
 
 ```sh
-git clone <this repo>
+git clone https://github.com/nvkudva/laya-server.git
 cd laya-server
 ./start.sh          # macOS, Linux
 .\start.ps1         # Windows
@@ -358,3 +358,8 @@ untested, and the `torch==2.14.0` Windows wheel has not been verified.
 
 Laya is by Convai Innovations (Apache-2.0). The Jev API
 shape is TypeSafe's; this project is not affiliated with TypeSafe and uses none of their code or weights.
+
+## License
+
+Apache-2.0 — see [LICENSE](LICENSE). The model weights are licensed separately by Convai
+Innovations, also Apache-2.0.
