@@ -23,6 +23,11 @@ DEMO_HTML = Path(__file__).resolve().parent / "static" / "demo.html"
 
 JSONContent = str | dict[str, Any] | list[Any]
 
+# Names a client may send instead of the loaded checkpoint's own. "laya" is what stock Jev clients
+# hard-code; "jev-latest" is typesafe-sdk's DEFAULT_MODEL, so a client that never passes `model=`
+# sends it. Both resolve to whichever checkpoint this process serves.
+ALIASES = frozenset({DEFAULT_MODEL, "jev-latest"})
+
 
 class NoulCriteria(BaseModel):
     true: JSONContent | None = None
@@ -52,8 +57,7 @@ Question = Annotated[NoulQuestion | ChoiceQuestion | ScoreQuestion, Field(discri
 
 class SystemOneRequest(BaseModel):
     state: JSONContent
-    # Stock Jev clients hard-code "laya"; accept it as an alias for whichever checkpoint is loaded.
-    model: str = DEFAULT_MODEL
+    model: str = DEFAULT_MODEL  # see ALIASES
     questions: dict[str, Question] = Field(min_length=1)
 
 
@@ -140,8 +144,9 @@ async def list_models() -> dict[str, Any]:
 
 @app.post("/v1/systemone")
 def system_one(req: Annotated[SystemOneRequest, Body()]) -> Any:
-    if req.model not in (_model.name, DEFAULT_MODEL):
-        return _invalid(["body", "model"], f"this server serves {_model.name!r}, not {req.model!r}")
+    if req.model != _model.name and req.model not in ALIASES:
+        known = ", ".join(sorted({_model.name, *ALIASES}))
+        return _invalid(["body", "model"], f"this server serves {_model.name!r}, not {req.model!r}; try one of: {known}")
     questions = {name: _to_laya(name, q) for name, q in req.questions.items()}
     try:
         with _lock:

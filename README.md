@@ -165,10 +165,13 @@ Option 4 in the menu removes every downloaded Laya checkpoint.
 
 ### Client compatibility
 
-- Stock Jev clients hard-code `model: "laya"` in the request body, so that value is accepted as an
-  alias for whichever checkpoint is loaded — the SDK keeps working after a switch.
-- The loaded checkpoint's own name is accepted too.
-- Any other name is a 422.
+Two names are accepted as aliases for whichever checkpoint is loaded, so a client keeps working
+after you switch checkpoints:
+
+- `jev-latest` — `typesafe-sdk`'s built-in default, which is what a client sends when it never passes
+  `model=` at all.
+- `laya` — what stock Jev clients hard-code in the request body.
+- The loaded checkpoint's own name works too. Any other name is a 422 that lists the accepted ones.
 
 ### Adding a checkpoint
 
@@ -297,7 +300,7 @@ Request:
 | field | type | notes |
 |---|---|---|
 | `state` | string \| object \| array | the content every question refers to; re-encoded per question and silently truncated — see [Differences from hosted Jev](#differences-from-hosted-jev) |
-| `model` | string | the loaded checkpoint's name, or the alias `laya`; anything else is a 422 |
+| `model` | string | the loaded checkpoint's name, or the aliases `jev-latest` / `laya`; anything else is a 422 |
 | `questions` | object | question name → question, at least one |
 
 Question types — all take an optional `instructions`, which may be a string, object or array:
