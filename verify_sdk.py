@@ -26,3 +26,11 @@ print("choice:", r.choices["area"].choice, r.choices["area"].confidence)
 print("score:", r.scores["urgency"].score, r.scores["urgency"].legend)
 print("noul:", r.nouls["refund"].noul, "| fallback-instructions:", r.nouls["no_instructions"].noul)
 print("models:", [m.name for m in c.models.list().models])
+
+# No model= anywhere: the SDK falls back to its own DEFAULT_MODEL ("jev-latest"). This is what an
+# untouched TypeSafe client sends, and the case a hard-coded model="laya" above would never reach.
+d = TypeSafeClient().system_one(
+    state="I was charged twice for the same order.",
+    questions={"refund": Noul(instructions="Asks for money back")},
+)
+print("untouched client:", d.model, d.nouls["refund"].noul)
