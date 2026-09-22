@@ -3,10 +3,36 @@
 A local HTTP server that runs the [Laya](https://huggingface.co/convaiinnovations/laya) decision
 model behind TypeSafe's **Jev / System One** wire API.
 
+> **Already calling TypeSafe or Jev? This is a drop-in replacement.** Point `TYPESAFE_BASE_URL` at
+> this server and your existing code keeps working — same routes, same request and response shapes,
+> so the stock `typesafe-sdk` and the `jev` decorators need no edits and no API key. The one thing
+> that changes is where the answers come from: Laya, on your own machine, instead of the hosted
+> service. See [Differences from hosted Jev](#differences-from-hosted-jev) before you rely on it.
+
 - Laya writes no text. You send one **state** and any number of typed **questions**.
 - You get back a calibrated probability for each question, from a single forward pass.
 - One FastAPI process owns HTTP, validation, the wire contract and inference.
 - One checkpoint is loaded at startup, and requests run one at a time behind a lock.
+
+## Features
+
+- **Drop-in Jev / System One API** — `GET /v1/models` and `POST /v1/systemone`, matching
+  `api.typesafe.ai` v0.2.0. An `Authorization: Bearer <key>` header is accepted and ignored, so
+  clients that always send one keep working.
+- **Runs entirely on your machine** — after the first download it needs no network, no account and no
+  key. Nothing you send leaves the host.
+- **Three question types** — `noul` (yes/no), `choice` (pick one label) and `score` (ordered levels).
+  Each answer carries a calibrated probability distribution and a confidence, never free text.
+- **Many questions, one forward pass** — the marginal question is cheap. One question takes about
+  20 ms; twelve take about 58 ms, roughly 5 ms each.
+- **Three checkpoints**, picked at start time: English, multilingual (100+ languages), and one tuned
+  for agent traces, support, invoices and security incidents.
+- **A built-in web UI** at `/demo`, with five ready-made examples, a JSON editor and a running log of
+  decisions — no build step.
+- **One process, one port** — the UI and the API are routes on the same server, so there is no CORS
+  setup and no second address to manage.
+- **Quick to start and easy to watch** — about three seconds to a serving port, with requests, errors
+  and full tracebacks in a rotating `server.log`.
 
 ## Quick start
 
