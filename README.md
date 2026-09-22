@@ -96,6 +96,53 @@ curl -s http://127.0.0.1:8000/v1/systemone -H 'content-type: application/json' -
 Field by field, that is the whole contract — see [API](#api) for the schema and
 [Web UI](#web-ui) for the same thing with nothing to type.
 
+## Web UI
+
+Open <http://127.0.0.1:8000/demo> with the server running.
+
+![The Laya demo page: a request panel on the left with a state box, a choice question and its
+criteria, and a decision log on the right](demo.png)
+
+The left column holds a **Request** panel. It has two views, toggled in its header:
+
+- **UI** — the *state* textarea plus one editable card per question; `+ noul` / `+ choice` / `+ score`
+  add a new one.
+- **JSON** — the same request as raw JSON in a CodeMirror editor, with syntax highlighting, folding
+  and inline parse errors. Edits round-trip back into the UI view.
+
+**load an example…**, the picker in the request header, loads one of five ready-made requests:
+
+- It fills both the state box and the question set, so picking one and pressing Send gives a real
+  answer with nothing to type.
+- The question sets are Laya's built-in ones, read live from the installed package. The sample states
+  are this project's, since `laya` ships questions only.
+- Edit either afterwards. Send with the **Send** button, or ⌘/Ctrl+Enter from the state box.
+
+The right pane is a log of decisions. Each turn sends one *state* and draws a card per question:
+
+- ranked probability bars for `choice`
+- a legend strip with the expected-value marker for `score`
+- a 0–1 gauge for `noul`
+- confidence, `act_probability` and the input-token count on all three
+
+Turns are independent — Laya has no memory. The question set, the current state and the last 30 turns
+live in `localStorage`.
+
+CodeMirror loads from esm.sh on demand. If that CDN is unreachable the UI view works normally and the
+JSON view reports `JSON editor unavailable`; nothing else needs a network.
+
+Two routes serve the UI and sit **outside the Jev contract**:
+
+| route | returns |
+|---|---|
+| `GET /demo` | `demo.html` |
+| `GET /ui/presets` | the five examples — `triage`, `router`, `moderation`, `guard`, `email` — each `{state, questions}` |
+
+`GET /` is a health check, also outside the Jev contract: `{"status": "ok", "model": "laya", "ui":
+"/demo"}`. It answers only once the model is loaded — the CLI claims the socket up front, but uvicorn
+starts accepting on it only after the startup hook finishes. So a 200 there means the server is ready
+to decide, not merely running.
+
 ## CLI
 
 ```sh
@@ -328,20 +375,6 @@ model aliases (including `typesafe-sdk`'s own default), one error shape across 4
 the instructions fallback, and every response validated against TypeSafe's generated schemas. The
 CLI tests cover port handling and address families.
 
-## Files
-
-| file | role |
-|---|---|
-| `start.sh`, `start.ps1` | thin wrappers: install uv, `uv sync`, hand off to the CLI |
-| `server/cli.py` | the `models` menu, `pull` and `serve`; port binding, logging, browser, startup banner |
-| `server/registry.py` | the checkpoint table and the download / cache / delete helpers |
-| `server/presets.py` | the five examples: Laya's question sets plus a sample state for each |
-| `server/api.py` | FastAPI app: routing, validation, error shaping, Jev↔Laya adapting, inference |
-| `server/static/demo.html` | the web UI — one file, no build step; the JSON editor pulls CodeMirror from esm.sh at runtime |
-| `pyproject.toml`, `uv.lock` | pinned dependency set |
-| `verify_sdk.py` | round-trip check against the real `typesafe-sdk` client |
-| `tests/test_contract.py` | the wire contract and the CLI, with no checkpoint loaded |
-
 ## API
 
 Mirrors `https://api.typesafe.ai` v0.2.0. An `Authorization: Bearer <key>` header is accepted and ignored.
@@ -381,51 +414,6 @@ Response and errors:
     goes to the log file.
 
 A worked call is at the top, under [Example](#example).
-
-## Web UI
-
-Open <http://127.0.0.1:8000/demo> with the server running.
-
-The left column holds a **Request** panel and an **Examples** panel. Request has two views, toggled
-in its header:
-
-- **UI** — the *state* textarea plus one editable card per question; `+ noul` / `+ choice` / `+ score`
-  add a new one.
-- **JSON** — the same request as raw JSON in a CodeMirror editor, with syntax highlighting, folding
-  and inline parse errors. Edits round-trip back into the UI view.
-
-**Examples** loads one of five ready-made requests:
-
-- It fills both the state box and the question set, so picking one and pressing Send gives a real
-  answer with nothing to type.
-- The question sets are Laya's built-in ones, read live from the installed package. The sample states
-  are this project's, since `laya` ships questions only.
-- Edit either afterwards. Send with the **Send** button, or ⌘/Ctrl+Enter from the state box.
-
-The right pane is a log of decisions. Each turn sends one *state* and draws a card per question:
-
-- ranked probability bars for `choice`
-- a legend strip with the expected-value marker for `score`
-- a 0–1 gauge for `noul`
-- confidence, `act_probability` and the input-token count on all three
-
-Turns are independent — Laya has no memory. The question set, the current state and the last 30 turns
-live in `localStorage`.
-
-CodeMirror loads from esm.sh on demand. If that CDN is unreachable the UI view works normally and the
-JSON view reports `JSON editor unavailable`; nothing else needs a network.
-
-Two routes serve the UI and sit **outside the Jev contract**:
-
-| route | returns |
-|---|---|
-| `GET /demo` | `demo.html` |
-| `GET /ui/presets` | the five examples — `triage`, `router`, `moderation`, `guard`, `email` — each `{state, questions}` |
-
-`GET /` is a health check, also outside the Jev contract: `{"status": "ok", "model": "laya", "ui":
-"/demo"}`. It answers only once the model is loaded — the CLI claims the socket up front, but uvicorn
-starts accepting on it only after the startup hook finishes. So a 200 there means the server is ready
-to decide, not merely running.
 
 ## Using the official clients
 
@@ -473,6 +461,20 @@ uv run --extra dev python verify_sdk.py
 
 Laya is by Convai Innovations (Apache-2.0). The Jev API shape is TypeSafe's. This project is not
 affiliated with TypeSafe and uses none of their code or weights.
+
+## Files
+
+| file | role |
+|---|---|
+| `start.sh`, `start.ps1` | thin wrappers: install uv, `uv sync`, hand off to the CLI |
+| `server/cli.py` | the `models` menu, `pull` and `serve`; port binding, logging, browser, startup banner |
+| `server/registry.py` | the checkpoint table and the download / cache / delete helpers |
+| `server/presets.py` | the five examples: Laya's question sets plus a sample state for each |
+| `server/api.py` | FastAPI app: routing, validation, error shaping, Jev↔Laya adapting, inference |
+| `server/static/demo.html` | the web UI markup; `style.css` and `main.js` sit beside it. No build step — the JSON editor pulls CodeMirror from esm.sh at runtime |
+| `pyproject.toml`, `uv.lock` | pinned dependency set |
+| `verify_sdk.py` | round-trip check against the real `typesafe-sdk` client |
+| `tests/test_contract.py` | the wire contract and the CLI, with no checkpoint loaded |
 
 ## License
 
