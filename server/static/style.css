@@ -1,0 +1,399 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap");
+
+/* ==========================================================================
+   Laya playground — one stylesheet, read top-down in document order:
+
+     1. tokens        the palette and the two font stacks
+     2. reset         box model, page surface, the [hidden] contract
+     3. controls      buttons, inputs, segmented switches
+     4. instrument bar  the header: lockup, tagline, readout, theme toggle
+     5. shell         the two-column grid and the panel chrome
+     6. request panel   the state box, the question editor, the JSON pane
+     7. conversation    turn cards: header, state, wire JSON
+     8. distributions   answer blocks and their bars
+     9. footer        credits
+    10. responsive    the one breakpoint
+
+   Components nest. A rule that belongs to a component sits inside that
+   component's block, addressed from the component root with `&` — never
+   nested inside another nested rule, so a part's selector depth never
+   depends on how deeply the blocks happen to be indented.
+   ========================================================================== */
+
+/* --- 1. tokens ---------------------------------------------------------- */
+
+:root {
+  --paper: #eceef0;
+  --surface: #ffffff;
+  --ink: #14181c;
+  --muted: #5f6a72;
+  --rule: #c9ced3;
+  --rule-strong: #14181c;
+  --signal: #1d5fd4;
+  --chart: #1d5fd4;
+  --track: #dfe3e6;
+  --warn: #8a5a10;
+  --warn-bg: #f6ecd8;
+  --sans: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  /* JSON token colours — same values as laya-web's CodeMirror highlight */
+  --t-key: #14181c;
+  --t-str: #0a6b52;
+  --t-num: #1d5fd4;
+  --t-lit: #8a4b9c;
+  --t-punct: #68727a;
+}
+
+/* Dark is declared twice, once per way of asking for it: the media query honours the OS setting
+   unless the page has been pinned to light, and the attribute is the toggle's own override. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #14181c; --surface: #1a1f24; --ink: #e4e8ea; --muted: #8d979e;
+    --rule: #2c343a; --rule-strong: #4a555d; --signal: #6ea0ff; --chart: #4a86f0;
+    --track: #262e35; --warn: #e0ae5c; --warn-bg: #2b2415;
+    --t-key: #e4e8ea; --t-str: #5cc2a0; --t-num: #7fb0ff; --t-lit: #c99ad8; --t-punct: #97a1a8;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #14181c; --surface: #1a1f24; --ink: #e4e8ea; --muted: #8d979e;
+  --rule: #2c343a; --rule-strong: #4a555d; --signal: #6ea0ff; --chart: #4a86f0;
+  --track: #262e35; --warn: #e0ae5c; --warn-bg: #2b2415;
+  --t-key: #e4e8ea; --t-str: #5cc2a0; --t-num: #7fb0ff; --t-lit: #c99ad8; --t-punct: #97a1a8;
+}
+
+/* --- 2. reset ----------------------------------------------------------- */
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font-family: var(--sans); font-size: 14px; line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The demo flips views by setting the `hidden` property, so it has to outrank every display rule
+   a component declares for the same element. */
+[hidden] { display: none !important; }
+
+.shell { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+
+/* --- 3. controls -------------------------------------------------------- */
+
+button {
+  font: 500 13px var(--sans); color: var(--surface); background: var(--rule-strong);
+  border: 1px solid var(--rule-strong); border-radius: 2px; padding: 7px 14px; cursor: pointer;
+
+  &:hover:not(:disabled) { background: var(--signal); border-color: var(--signal); }
+  &:disabled { opacity: 0.45; cursor: default; }
+  &:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+
+  /* ghost buttons: the same shape as laya-web's scenario chips */
+  &.ghost {
+    font: 400 11.5px var(--mono); padding: 3px 8px;
+    background: transparent; color: var(--muted); border: 1px solid var(--rule);
+
+    &:hover { background: transparent; color: var(--ink); border-color: var(--rule-strong); }
+  }
+}
+
+/* Send is the only primary action, so it carries the signal colour. When it is disabled it drops
+   that colour altogether — a faded blue still reads as a live button, which is why it looked
+   enabled with an empty state. */
+#send {
+  background: var(--signal); border-color: var(--signal);
+
+  &:hover:not(:disabled) { background: color-mix(in srgb, var(--signal) 84%, var(--ink)); border-color: color-mix(in srgb, var(--signal) 84%, var(--ink)); }
+  &:disabled { background: var(--rule); border-color: var(--rule); color: var(--muted); opacity: 1; }
+}
+
+input, textarea, select {
+  font: 400 12.5px var(--mono); color: var(--ink); background: var(--surface);
+  border: 1px solid var(--rule); border-radius: 2px; padding: 5px 7px; width: 100%;
+
+  &:focus-visible { outline: 2px solid var(--signal); outline-offset: -1px; border-color: var(--signal); }
+}
+input {
+  &:disabled { color: var(--muted); background: var(--paper); }
+}
+textarea { resize: vertical; font-family: var(--sans); font-size: 13px; }
+select { width: auto; }
+
+/* A segmented switch: two or more ghost buttons where one is `is-on`. Used for the request view
+   and, inside every turn header, for that turn's own view. */
+.seg {
+  display: flex; gap: 4px;
+
+  & .ghost.is-on { color: var(--ink); border-color: var(--rule-strong); background: var(--paper); }
+}
+
+/* The ✕ that removes a question, an option or a rung. */
+.x {
+  flex: none;
+
+  &:hover { color: var(--warn); border-color: var(--warn); }
+}
+
+/* --- 4. instrument bar -------------------------------------------------- */
+
+.bar { flex: none; border-bottom: 1px solid var(--rule); background: var(--surface); padding: 14px 16px 12px; }
+.bar-inner { max-width: 1680px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 20px 32px; align-items: baseline; }
+.bar-head { flex: 1 1 720px; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.bar-title { display: flex; align-items: center; gap: 14px; }
+.lockup { flex: none; width: 116px; height: auto; color: var(--ink); }
+.wordmark { font-weight: 600; font-size: 19px; letter-spacing: -0.015em; margin: 0; }
+.bar-copy { min-width: 0; }
+
+.tagline {
+  color: var(--muted); font-size: 13px; max-width: 118ch; margin: 4px 0 0; line-height: 1.55;
+
+  & a { color: var(--signal); }
+  & b { font-family: var(--mono); font-weight: 400; color: var(--ink); }
+}
+
+.bar-aside { margin-left: auto; }
+
+.readout {
+  display: flex; gap: 22px; margin: 0; align-items: flex-start;
+
+  & div { display: flex; flex-direction: column; gap: 1px; }
+  & dt { color: var(--muted); font-size: 11px; }
+  & dd { margin: 0; font-family: var(--mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+}
+
+.theme-toggle { margin-left: 12px; font: 400 11px var(--mono); padding: 2px 7px; background: transparent; color: var(--muted); border: 1px solid var(--rule); border-radius: 2px; }
+/* Later than `button:hover:not(:disabled)` and the same specificity, so it has to stay here. */
+button.theme-toggle:hover { color: var(--ink); border-color: var(--rule-strong); background: transparent; }
+
+/* --- 5. shell ----------------------------------------------------------- */
+
+main {
+  flex: 1; min-height: 0; width: 100%; max-width: 1680px; margin: 0 auto; padding: 16px;
+  display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.panel {
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 2px;
+  display: flex; flex-direction: column; min-height: 0; height: 100%; overflow: hidden;
+}
+
+.panel-head {
+  flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 9px 12px; border-bottom: 1px solid var(--rule);
+
+  & h2 { margin: 0; font-size: 13px; font-weight: 600; }
+}
+
+.panel-note { color: var(--muted); font-size: 12px; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.panel-body { flex: 1; min-height: 220px; overflow: auto; }
+
+.actions {
+  flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border-top: 1px solid var(--rule);
+
+  & h3 { flex: 1 0 100%; margin: 0; font-size: 11px; font-weight: 600; color: var(--muted); }
+}
+
+/* The request panel takes the column's slack and the add-a-question strip stays pinned to its
+   foot. .panel-body's 220px floor would push that strip out of the panel's clipped box on a short
+   viewport, so the body shrinks and scrolls instead. */
+.col-left {
+  display: flex; flex-direction: column; gap: 16px; min-height: 0;
+
+  & > .panel { height: auto; min-height: 0; }
+  & > .panel:first-child { flex: 1 1 auto; }
+  & > .panel:first-child > .panel-body { min-height: 0; }
+}
+
+.notice {
+  margin: 0; padding: 9px 12px; background: var(--warn-bg); color: var(--warn); font-size: 12.5px;
+
+  & h3 { margin: 0 0 4px; font-size: 12.5px; }
+  & code { font-family: var(--mono); }
+}
+
+/* --- 6. request panel --------------------------------------------------- */
+
+/* The example picker, the UI/JSON switch and Send share the panel head. */
+.head-tools {
+  display: flex; align-items: center; gap: 10px; min-width: 0;
+
+  & select { padding: 2px 6px; font-size: 11.5px; max-width: 22ch; }
+  & #send { font-size: 11.5px; padding: 3px 12px; }
+}
+
+#request-ui { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+#questions { display: flex; flex-direction: column; gap: 10px; }
+#state { min-height: 76px; }
+
+/* One question: name, type and remove on the first line, instructions under it, criteria last. */
+.q {
+  border: 1px solid var(--rule); border-radius: 2px; padding: 10px; display: flex; flex-direction: column; gap: 6px;
+
+  & .row {
+    display: flex; gap: 6px; align-items: center;
+
+    & .meta { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+    & .push { margin-left: auto; }
+  }
+  & label { font-size: 11px; font-weight: 600; color: var(--muted); }
+  & textarea { min-height: 40px; }
+}
+
+/* One criterion. For choice the left input is the wire key, so it holds a fixed share of the row
+   and leaves the description the rest. */
+.crit {
+  display: flex; gap: 6px;
+
+  & input.label { flex: 0 0 34%; }
+}
+
+/* CodeMirror mounts into #q-json; these keep its surfaces transparent so the panel shows
+   through, and let the scroller own the scrolling. */
+.cm-host {
+  height: 100%; min-height: 320px; overflow: hidden;
+
+  & .cm-editor {
+    height: 100%; background: transparent; outline: none;
+
+    & .cm-scroller,
+    & .cm-gutters { height: 100%; background: transparent; }
+  }
+  & .cm-scroller { overflow: auto; }
+}
+
+/* --- 7. conversation ---------------------------------------------------- */
+
+/* Inter-turn gap is ~3x the rhythm inside a turn, so a request/response pair reads as one unit. */
+#log {
+  padding: 16px; display: flex; flex-direction: column; gap: 28px;
+
+  & .empty { color: var(--muted); margin: auto; text-align: center; max-width: 42ch; font-size: 13px; }
+}
+
+/* One card per request/response pair. The card owns the outer boundary, so the pieces inside it
+   carry no borders or radii of their own. Parts are addressed from here rather than from .state,
+   so the minimized-turn rules below stay one step more specific than the base ones. */
+.turn {
+  border: 1px solid var(--rule); border-radius: 2px; background: var(--surface); overflow: hidden;
+
+  /* The header is the disclosure control for the whole turn. */
+  & .turn-head {
+    display: flex; align-items: baseline; gap: 7px; padding: 6px 10px;
+    border-bottom: 1px solid var(--rule); background: var(--paper);
+    font: 400 11px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums;
+    cursor: pointer; user-select: none;
+
+    &:hover { color: var(--ink); }
+    & > span { white-space: nowrap; }
+    & .turn-caret { flex: none; }
+    & .turn-meta { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    & .turn-warn { color: var(--warn); white-space: normal; }
+    & button.ghost { font-size: 10.5px; padding: 1px 6px; }
+  }
+
+  /* The state row holds the prose, or the wire pair when this turn's switch is on JSON. */
+  & .state { padding: 7px 10px; border-bottom: 1px solid var(--rule); font-size: 12.5px; }
+  & .state-label { font-weight: 600; color: var(--muted); }
+  & .state-text { min-width: 0; white-space: pre-wrap; font-weight: 600; }
+  & .state-json,
+  & .state-resp { margin: 0; font: 400 11.5px var(--mono); color: var(--muted); white-space: pre-wrap; overflow-x: auto; }
+  & .state-sub { margin: 8px 0 3px; }
+  & .turn-pending { padding: 10px; font: 400 12px var(--mono); color: var(--muted); }
+
+  /* Minimized turns keep one line of the state so they stay identifiable; the open turn shows it
+     whole. These come last so they outrank the base rules above on source order as well. */
+  &:not(.is-open) {
+    & .answers,
+    & .turn-pending,
+    & .state-sub,
+    & .state-resp { display: none; }
+
+    & .state-text,
+    & .state-json { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  }
+}
+
+/* --- 8. distributions --------------------------------------------------- */
+
+/* One question's answer is one distribution: a single fill on a neutral track, no legend, rank
+   carried by ink weight. Same readout for all three types. */
+.dist {
+  padding: 8px 10px 7px; border-bottom: 1px solid var(--rule); display: flex; flex-direction: column;
+
+  &:last-child { border-bottom: 0; }
+
+  /* The question leads the block, with its answer on the same line; the name/type line under it
+     says which question this is. */
+  & .dist-q { display: flex; align-items: baseline; gap: 10px; margin-bottom: 3px; }
+  & .dist-instr { flex: 1; min-width: 0; color: var(--ink); font-size: 13px; font-weight: 600; line-height: 1.35; }
+  & .dist-answer { flex: none; font-family: var(--mono); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  & .dist-head {
+    display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px;
+
+    & h3 { margin: 0; font-size: 11.5px; font-weight: 500; font-family: var(--mono); color: var(--muted); }
+  }
+  & .dist-type { font-size: 10.5px; color: var(--muted); }
+
+  /* Label left, bar right: the track is a fixed 30% of the card so every chart is the same width. */
+  & .bars { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  & .bar-row {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(30px, 30%) 3em; align-items: center; gap: 8px;
+
+    & .bar-label { font-family: var(--mono); font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    & .bar-track { height: 6px; background: var(--track); border-radius: 2px; overflow: hidden; }
+    & .bar-fill { display: block; height: 100%; background: var(--chart); border-radius: 0 3px 3px 0; }
+    & .bar-value {
+      font-family: var(--mono); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right;
+
+      & .pct { opacity: 0.55; }
+    }
+    &.is-top .bar-label,
+    &.is-top .bar-value { color: var(--ink); font-weight: 500; }
+    &:hover .bar-label,
+    &:hover .bar-value { color: var(--ink); }
+  }
+  & .dist-foot {
+    display: flex; align-items: baseline; gap: 4px 12px; margin-top: 5px; font-family: var(--mono); font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums;
+
+    & .dist-meta { margin-left: auto; display: flex; gap: 12px; white-space: nowrap; }
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dist .bar-fill { transition: width 220ms cubic-bezier(0.2, 0, 0, 1); }
+}
+
+/* --- 9. footer ---------------------------------------------------------- */
+
+footer { flex: none; border-top: 1px solid var(--rule); background: var(--surface); }
+
+.footer-inner {
+  max-width: 1680px; margin: 0 auto; padding: 7px 16px 8px;
+  color: var(--muted); font-size: 11.5px; line-height: 1.5;
+  display: flex; flex-wrap: wrap; gap: 2px 26px;
+}
+
+.credit-group {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 2px 12px;
+
+  & h2 { margin: 0; font-size: 11.5px; font-weight: 600; color: var(--ink); }
+}
+
+.credits {
+  list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 14px;
+
+  & li { display: flex; align-items: center; gap: 0 5px; }
+  & a { font-family: var(--mono); }
+}
+
+footer a { color: var(--signal); }
+.icon { vertical-align: baseline; flex: none; opacity: 0.8; }
+
+/* --- 10. responsive ----------------------------------------------------- */
+
+@media (max-width: 900px) {
+  main { grid-template-columns: minmax(0, 1fr); }
+  .shell { height: auto; min-height: 100%; }
+  .panel { height: auto; min-height: 58vh; }
+  .readout { flex-wrap: wrap; }
+}

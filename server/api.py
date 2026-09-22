@@ -12,6 +12,7 @@ from typing import Annotated, Any, Literal
 import laya
 from fastapi import Body, FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from transformers.initialization import no_init_weights
@@ -19,7 +20,8 @@ from transformers.initialization import no_init_weights
 from .presets import examples
 from .registry import DEFAULT_MODEL, Model, download, resolve
 
-DEMO_HTML = Path(__file__).resolve().parent / "static" / "demo.html"
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+DEMO_HTML = STATIC_DIR / "demo.html"
 
 JSONContent = str | dict[str, Any] | list[Any]
 
@@ -76,6 +78,10 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Laya System One", version=version("laya-server"), lifespan=lifespan)
+
+# The demo page is one HTML file plus the stylesheet and script it names, so anything served out of
+# static/ sits under one prefix rather than at the root.
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 def use_model(model: Model) -> None:
