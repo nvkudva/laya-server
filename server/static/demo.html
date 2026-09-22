@@ -55,7 +55,10 @@ body {
 /* --- instrument bar ----------------------------------------------------- */
 .bar { flex: none; border-bottom: 1px solid var(--rule); background: var(--surface); padding: 14px 16px 12px; }
 .bar-inner { max-width: 1680px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 20px 32px; align-items: baseline; }
-.bar-head { flex: 1 1 720px; min-width: 0; }
+.bar-head { flex: 1 1 720px; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.bar-title { display: flex; align-items: center; gap: 14px; }
+.bar-copy { min-width: 0; }
+.lockup { flex: none; width: 116px; height: auto; color: var(--ink); }
 .wordmark { font-weight: 600; font-size: 19px; letter-spacing: -0.015em; margin: 0; }
 .tagline { color: var(--muted); font-size: 13px; max-width: 118ch; margin: 4px 0 0; line-height: 1.55; }
 .tagline a { color: var(--signal); }
@@ -69,7 +72,7 @@ body {
 /* --- panels ------------------------------------------------------------- */
 main {
   flex: 1; min-height: 0; width: 100%; max-width: 1680px; margin: 0 auto; padding: 16px;
-  display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 @media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); } }
 .panel {
@@ -148,37 +151,64 @@ select { width: auto; }
 .x:hover { color: var(--warn); border-color: var(--warn); }
 
 /* --- conversation ------------------------------------------------------- */
-#log { padding: 16px; display: flex; flex-direction: column; gap: 20px; }
+/* Inter-turn gap is ~3x the rhythm inside a turn, so a request/response pair reads as one unit. */
+#log { padding: 16px; display: flex; flex-direction: column; gap: 28px; }
 #log .empty { color: var(--muted); margin: auto; text-align: center; max-width: 42ch; font-size: 13px; }
-.turn { display: flex; flex-direction: column; gap: 10px; }
-.state { background: var(--paper); border: 1px solid var(--rule); border-radius: 2px; padding: 10px 12px; white-space: pre-wrap; }
-.state-label { display: block; font: 600 11px var(--sans); color: var(--muted); margin-bottom: 4px; }
-.answers { border: 1px solid var(--rule); border-radius: 2px; }
+/* One card per request/response pair. The card owns the outer boundary, so the pieces inside it
+   carry no borders or radii of their own. */
+.turn { border: 1px solid var(--rule); border-radius: 2px; background: var(--surface); overflow: hidden; }
+/* The header is the disclosure control for the whole turn. */
+.turn-head {
+  display: flex; align-items: baseline; gap: 7px; padding: 6px 10px;
+  border-bottom: 1px solid var(--rule); background: var(--paper);
+  font: 400 11px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums;
+  cursor: pointer; user-select: none;
+}
+.turn-head:hover { color: var(--ink); }
+.turn-head > span { white-space: nowrap; }
+.turn-head .turn-caret { flex: none; }
+.turn-head .turn-meta { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.turn-head .turn-warn { color: var(--warn); white-space: normal; }
+.turn-head button.ghost { font-size: 10.5px; padding: 1px 6px; }
+/* Minimized turns keep one line of the state so they stay identifiable; the open turn shows it whole. */
+.turn:not(.is-open) .answers,
+.turn:not(.is-open) .turn-pending,
+.turn:not(.is-open) .state-sub,
+.turn:not(.is-open) .state-resp { display: none; }
+.turn:not(.is-open) .state-text,
+.turn:not(.is-open) .state-json { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.state { padding: 7px 10px; border-bottom: 1px solid var(--rule); font-size: 12.5px; }
+.state-label { font-weight: 600; color: var(--muted); }
+.state-text { min-width: 0; white-space: pre-wrap; }
+.state-json, .state-resp { margin: 0; font: 400 11.5px var(--mono); color: var(--muted); white-space: pre-wrap; overflow-x: auto; }
+.state-sub { margin: 8px 0 3px; }
+.turn-pending { padding: 10px; font: 400 12px var(--mono); color: var(--muted); }
 
 /* --- distribution readout ----------------------------------------------- */
-.dist { padding: 12px 12px 10px; border-bottom: 1px solid var(--rule); }
+.dist { padding: 8px 10px 7px; border-bottom: 1px solid var(--rule); display: flex; flex-direction: column; }
 .dist:last-child { border-bottom: 0; }
-.dist-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
-.dist-head h3 { margin: 0; font-size: 13px; font-weight: 600; font-family: var(--mono); }
-.dist-type { font-size: 11px; color: var(--muted); }
-.dist-answer { margin-left: auto; font-family: var(--mono); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; }
-.dist-instr { color: var(--muted); font-size: 12px; margin-bottom: 9px; }
+/* The question leads the block, with its answer on the same line; the name/type line under it
+   says which question this is. */
+.dist-q { display: flex; align-items: baseline; gap: 10px; margin-bottom: 3px; }
+.dist-instr { flex: 1; min-width: 0; color: var(--ink); font-size: 13px; font-weight: 600; line-height: 1.35; }
+.dist-answer { flex: none; font-family: var(--mono); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.dist-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.dist-head h3 { margin: 0; font-size: 11.5px; font-weight: 500; font-family: var(--mono); color: var(--muted); }
+.dist-type { font-size: 10.5px; color: var(--muted); }
 
-.bars { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
-.bar-row { display: grid; grid-template-columns: minmax(0, auto) minmax(30px, 1fr) 3.4em; align-items: center; gap: 9px; }
-.bar-label { font-family: var(--mono); font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bar-track { height: 10px; background: var(--track); border-radius: 2px; overflow: hidden; }
+.bars { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.bar-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(30px, 30%) 3em; align-items: center; gap: 8px; }
+.bar-label { font-family: var(--mono); font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-track { height: 6px; background: var(--track); border-radius: 2px; overflow: hidden; }
 .bar-fill { display: block; height: 100%; background: var(--chart); border-radius: 0 3px 3px 0; }
-.bar-value { font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+.bar-value { font-family: var(--mono); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
 .bar-value .pct { opacity: 0.55; }
 .bar-row.is-top .bar-label, .bar-row.is-top .bar-value { color: var(--ink); font-weight: 500; }
 .bar-row:hover .bar-label, .bar-row:hover .bar-value { color: var(--ink); }
 @media (prefers-reduced-motion: no-preference) { .bar-fill { transition: width 220ms cubic-bezier(0.2, 0, 0, 1); } }
 
-.dist-foot { display: flex; align-items: baseline; gap: 4px 14px; margin-top: 8px; font-family: var(--mono); font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.dist-meta { margin-left: auto; display: flex; gap: 14px; white-space: nowrap; }
-.turn-foot { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
-.turn-foot .warn { color: var(--warn); }
+.dist-foot { display: flex; align-items: baseline; gap: 4px 12px; margin-top: 5px; font-family: var(--mono); font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.dist-meta { margin-left: auto; display: flex; gap: 12px; white-space: nowrap; }
 
 .notice { margin: 0; padding: 9px 12px; background: var(--warn-bg); color: var(--warn); font-size: 12.5px; }
 .notice h3 { margin: 0 0 4px; font-size: 12.5px; }
@@ -219,20 +249,39 @@ footer a { color: var(--signal); }
 <header class="bar">
   <div class="bar-inner">
     <div class="bar-head">
-      <h1 class="wordmark">Laya — System One decision model running locally on your machine</h1>
+      <div class="bar-title">
+      <svg class="lockup" viewBox="8 7.5 131 52.5" role="img" aria-label="Laya">
+        <g transform="translate(2.00,5.60) scale(0.80)">
+          <path d="M 22.141 13.458 A 21.0 21.0 0 1 0 42.500 50.187" fill="none" stroke="#2a78d6" stroke-width="5.0" stroke-linecap="round" opacity="0.95"/>
+          <circle cx="48.213" cy="42.609" r="2.782" fill="#2a78d6" opacity="0.929"/>
+          <circle cx="49.456" cy="33.958" r="2.527" fill="#2a78d6" opacity="0.894"/>
+          <circle cx="46.696" cy="26.535" r="2.291" fill="#2a78d6" opacity="0.852"/>
+          <circle cx="41.336" cy="21.918" r="2.067" fill="#2a78d6" opacity="0.803"/>
+          <circle cx="35.242" cy="20.694" r="1.852" fill="#2a78d6" opacity="0.749"/>
+          <circle cx="30.173" cy="22.422" r="1.642" fill="#2a78d6" opacity="0.691"/>
+          <circle cx="27.294" cy="25.889" r="1.438" fill="#2a78d6" opacity="0.628"/>
+          <circle cx="26.902" cy="29.558" r="1.239" fill="#2a78d6" opacity="0.562"/>
+          <circle cx="28.430" cy="32.075" r="1.043" fill="#2a78d6" opacity="0.493"/>
+          <circle cx="30.702" cy="32.690" r="0.850" fill="#2a78d6" opacity="0.420"/>
+          <circle cx="32.00" cy="32.00" r="2.35" fill="#2a78d6"/>
+        </g>
+        <text x="70" y="42" font-family="DejaVu Sans, Helvetica Neue, Helvetica, Arial, sans-serif"
+              font-size="34" font-weight="600" letter-spacing="0.5" fill="currentColor">laya</text>
+      </svg><span class="wordmark">System One decision model running locally on your machine</span>
+      </div>
+      <div class="bar-copy">
+
       <p class="tagline">
         It is not a chat model. It is a System One model like
-        <a href="https://typesafe.ai" target="_blank" rel="noreferrer">Jev</a>. You send a
-        state — any text or JSON as information context — and a set of typed questions, and it
-        returns typed answers with calibrated probabilities in a single forward pass. This page
-        talks to a local FastAPI server over the Jev wire API, so nothing leaves your machine.
-        Question types: <b>noul</b> answers true or false, <b>choice</b> picks one named option,
-        <b>score</b> returns the expectation over ordered levels.
+        <a href="https://typesafe.ai" target="_blank" rel="noreferrer">Jev</a>. 
+        <br>Send a state — any text or JSON & a set of questions, returns answers with calibrated probabilities in a single forward pass.
+        <br>Question types: <b>noul</b> answers true or false, <b>choice</b> picks one named option,<b>score</b> returns the expectation over ordered levels.
+        <br>Api served at /v1/systemone
       </p>
+      </div>
     </div>
     <div class="bar-aside">
       <dl class="readout">
-        <div><dt>Checkpoint</dt><dd>ModernBERT-large</dd></div>
         <div><dt>Served by</dt><dd id="r-model">—</dd></div>
         <div><dt>Context</dt><dd>512 tok</dd></div>
         <div><dt>Last run</dt><dd id="r-tokens">—</dd></div>
@@ -604,7 +653,7 @@ function rowsFor(a) {
 }
 
 function summaryFor(a) {
-  if (a.type === "noul") return (a.noul ?? 0).toFixed(4);
+  if (a.type === "noul") return (a.noul ?? 0) >= 0.5 ? "true" : "false";
   if (a.type === "score") return (a.score ?? 0).toFixed(2);
   return a.choice ?? "";
 }
@@ -614,11 +663,12 @@ function renderAnswer(name, q, a) {
   const winner = data.reduce((best, r, i) => (r.p > data[best].p ? i : best), 0);
   const act = a.action?.act_probability ?? a.rl_agent?.act_probability;
   return el("section", { class: "dist" },
+    el("div", { class: "dist-q" },
+      el("span", { class: "dist-instr" }, q?.instructions || name),
+      el("span", { class: "dist-answer" }, summaryFor(a))),
     el("header", { class: "dist-head" },
       el("h3", {}, name),
-      el("span", { class: "dist-type" }, a.type),
-      el("span", { class: "dist-answer" }, summaryFor(a))),
-    q?.instructions ? el("div", { class: "dist-instr" }, q.instructions) : null,
+      el("span", { class: "dist-type" }, a.type)),
     el("ol", { class: "bars" }, data.map((r, i) =>
       el("li", { class: i === winner ? "bar-row is-top" : "bar-row", title: `${r.label} — ${r.p.toFixed(4)}` },
         el("span", { class: "bar-label" }, r.label),
@@ -658,14 +708,74 @@ let history = store.get("laya.history", []).map((turn) => turn.request ? turn : 
   error: turn.error,
 });
 
-function renderTurn(turn) {
+/* Index of the one expanded turn, 0-based over `history`. -1 means all of them are minimized. */
+let openIndex = -1;
+
+function syncOpen() {
+  document.querySelectorAll("#log .turn").forEach((node, i) => {
+    const open = i === openIndex;
+    node.classList.toggle("is-open", open);
+    const caret = node.querySelector(".turn-caret");
+    if (caret) caret.textContent = open ? "▾" : "▸";
+  });
+}
+
+function turnHead(turn, index) {
+  const tokens = turn.data?.usage?.input_tokens;
+  const time = turn.at ? new Date(turn.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : null;
+  return el("header", { class: "turn-head" },
+    el("span", { class: "turn-caret" }, "▸"),
+    el("span", {}, `Request #${index + 1}`),
+    time ? el("span", {}, `· ${time}`) : null,
+    el("span", { class: "turn-meta" },
+      tokens >= 450 ? el("span", { class: "turn-warn", title: "Content past the 512-token context limit is silently truncated" }, "⚠ near 512-tok limit") : null,
+      el("span", {}, turn.data ? `${tokens} tok` : turn.pending ? "sending…" : "error"),
+      el("div", { class: "seg turn-view" },
+        el("button", { type: "button", class: "ghost", "data-view": "ui" }, "UI"),
+        el("button", { type: "button", class: "ghost", "data-view": "json" }, "JSON"))));
+}
+
+/* JSON is the wire pair — the request as sent and the reply as received — so the answers block,
+   which is only a rendering of `response.answers`, stands down while it is up. */
+function applyView(node, view) {
+  const json = view === "json";
+  node.querySelector(".state-text").hidden = json;
+  for (const e of node.querySelectorAll(".state-json, .state-sub, .state-resp")) e.hidden = !json;
+  const answers = node.querySelector(".answers");
+  if (answers) answers.hidden = json;
+  for (const b of node.querySelectorAll(".turn-view button[data-view]")) b.classList.toggle("is-on", b.dataset.view === view);
+}
+
+/* Both views are built up front and swapped with `hidden`, so flipping the toggle never rebuilds. */
+function stateRow(turn) {
+  const replied = turn.data !== undefined || turn.error !== undefined;
+  return el("div", { class: "state" },
+    el("div", { class: "state-text" }, turn.request.state),
+    el("pre", { class: "state-json" }, JSON.stringify(turn.request, null, 2)),
+    replied ? el("div", { class: "state-label state-sub" }, "Response") : null,
+    replied ? el("pre", { class: "state-resp" }, JSON.stringify(turn.data ?? { error: turn.error }, null, 2)) : null);
+}
+
+function renderTurn(turn, index) {
   const tokens = turn.data?.usage?.input_tokens;
   const node = el("div", { class: "turn" },
-    el("div", { class: "state" }, el("span", { class: "state-label" }, "Request"), turn.request.state),
-    turn.error ? renderError(turn.error) : renderAnswers(turn.request.questions, turn.data),
-    turn.error ? null : el("div", { class: "turn-foot" },
-      el("span", {}, `${turn.data.model} · ${tokens} input tokens`),
-      tokens >= 450 ? el("span", { class: "warn" }, "  ⚠ near the 512-token limit — content may be silently truncated") : null));
+    turnHead(turn, index),
+    stateRow(turn),
+    turn.error ? renderError(turn.error) : renderAnswers(turn.request.questions, turn.data));
+  applyView(node, turn.view ?? "ui");
+
+  node.querySelector(".turn-head").addEventListener("click", (e) => {
+    if (e.target.closest(".turn-view")) return; // the view buttons live in the header, not on it
+    openIndex = openIndex === index ? -1 : index;
+    syncOpen();
+  });
+  node.querySelector(".turn-view").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-view]");
+    if (!btn) return;
+    turn.view = btn.dataset.view;
+    applyView(node, turn.view);
+  });
+
   log.append(node);
   log.parentElement.scrollTop = log.parentElement.scrollHeight;
   if (turn.data) {
@@ -682,16 +792,24 @@ function renderLog() {
       "Laya answers every question in one pass — each turn is independent, it has no memory."));
     return;
   }
+  openIndex = history.length - 1;
   history.forEach(renderTurn);
+  syncOpen();
 }
 
 async function ask(request) {
   log.querySelector(".empty")?.remove();
+  const at = Date.now();
   const pendingNode = el("div", { class: "turn" },
-    el("div", { class: "state" }, el("span", { class: "state-label" }, "Request"), request.state),
-    el("div", { class: "turn-foot" }, "thinking…"));
+    turnHead({ request, at, pending: true }, history.length),
+    stateRow({ request }),
+    el("div", { class: "turn-pending" }, "thinking…"));
+  applyView(pendingNode, "ui");
   log.append(pendingNode);
   log.parentElement.scrollTop = log.parentElement.scrollHeight;
+  /* The new turn opens; every turn before it minimizes. */
+  openIndex = history.length;
+  syncOpen();
 
   let turn;
   try {
@@ -701,14 +819,16 @@ async function ask(request) {
       body: JSON.stringify(request),
     });
     const body = await res.json();
-    turn = res.ok ? { request, data: body } : { request, error: body.detail };
+    turn = res.ok ? { request, data: body, at } : { request, error: body.detail, at };
   } catch (e) {
-    turn = { request, error: String(e) };
+    turn = { request, error: String(e), at };
   }
   pendingNode.remove();
   history.push(turn);
   store.set("laya.history", history.slice(-30));
-  renderTurn(turn);
+  openIndex = history.length - 1;
+  renderTurn(turn, openIndex);
+  syncOpen();
 }
 
 // ---- wiring --------------------------------------------------------------
