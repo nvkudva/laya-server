@@ -1,13 +1,12 @@
 # laya server
 
-A local HTTP server that exposes the [Laya](https://huggingface.co/convaiinnovations/laya) decision model
-behind TypeSafe's **Jev / System One** wire API.
+A local HTTP server that runs the [Laya](https://huggingface.co/convaiinnovations/laya) decision
+model behind TypeSafe's **Jev / System One** wire API.
 
-A single FastAPI process owns HTTP, validation, the wire contract and inference. One checkpoint is
-loaded once at startup and requests are serialized behind a lock.
-
-Laya generates no text. You send one **state** plus any number of typed **questions**; it returns a
-calibrated probability distribution per question from a single forward pass.
+- Laya writes no text. You send one **state** and any number of typed **questions**.
+- You get back a calibrated probability for each question, from a single forward pass.
+- One FastAPI process owns HTTP, validation, the wire contract and inference.
+- One checkpoint is loaded at startup, and requests run one at a time behind a lock.
 
 ## Quick start
 
@@ -18,12 +17,11 @@ cd laya-server
 .\start.ps1         # Windows
 ```
 
-The wrappers only install [uv](https://docs.astral.sh/uv/) if it is missing and run `uv sync`; all
-the real work is in the `laya-server` CLI, so every platform takes the same code path. Default
-behaviour is `serve`: download the weights if needed, start on the first free port from 8000, open
-the UI. Ctrl-C stops it.
-
-Any CLI arguments pass straight through, so the wrapper is also how you pick a model:
+- The wrappers install [uv](https://docs.astral.sh/uv/) only if it is missing, run `uv sync`, then
+  hand off to the `laya-server` CLI — so every platform takes the same code path.
+- The default action is `serve`: download the weights if needed, start on the first free port from
+  8000, and open the UI. Ctrl-C stops it.
+- Arguments pass straight through, so the wrapper is also how you pick a model:
 
 ```sh
 ./start.sh models                            # menu: choose a checkpoint, it downloads and starts
@@ -41,17 +39,24 @@ laya-server serve [model]        # serve a named checkpoint
 laya-server pull [model...]      # download without starting (no name = all)
 ```
 
-Four options, shared by all of them: `--host` (default `127.0.0.1`), `--port` (default: the first
-free port from 8000), `--no-browser`, and `--log-file` (default `server.log`). An explicit `--port`
-is used as given — if it is busy the command fails immediately rather than drifting to another port.
+Four options work on all of them:
 
-Requests, startup and shutdown lines, and full tracebacks for any 500 go to the log file at INFO,
-rotating at 5 MB and keeping three older files. The console stays quiet: only warnings and errors.
-Clients never see an internal error message — the log file is the only place they appear.
+- `--host` — bind address, default `127.0.0.1`.
+- `--port` — default is the first free port from 8000. Name a port and it is used as given: if it is
+  busy the command fails at once rather than drifting to another one.
+- `--no-browser` — do not open the UI.
+- `--log-file` — default `server.log`.
+
+What goes where:
+
+- **The log file** gets every request, the startup and shutdown lines, and the full traceback for any
+  500. It rotates at 5 MB and keeps three older files.
+- **The console** stays quiet — warnings and errors only.
+- **Clients** never see an internal error message. The log file is the only place they appear.
 
 ## Models
 
-Three checkpoints are available. One is loaded per process, chosen at start time.
+Three checkpoints. One is loaded per process, chosen at start time.
 
 | name | encoder | context | download | use it for |
 |---|---|---|---|---|
@@ -78,10 +83,9 @@ Laya checkpoints
 Select [1-4, q]:
 ```
 
-`cached` means the weights are already on disk; a size is what downloading will cost. Pick a number
-and it downloads if needed, then starts the server — one step, no separate pull.
-
-Piped or run from a script, `models` prints the same table and exits instead of prompting.
+- `cached` means the weights are already on disk. A size is what downloading will cost.
+- Pick a number and it downloads if needed, then starts the server — one step, no separate pull.
+- Piped or run from a script, `models` prints the same table and exits instead of asking.
 
 ### Or name it directly
 
@@ -89,12 +93,9 @@ Piped or run from a script, `models` prints the same table and exits instead of 
 ./start.sh serve laya-typed-decisions
 ```
 
-Switching is just that: stop the server, start it again with a different name. Nothing is cached per
-project and nothing needs re-syncing. Check which one is running with:
-
-```sh
-curl -s http://127.0.0.1:8000/v1/models
-```
+- To switch, stop the server and start it again with a different name. Nothing is cached per project
+  and nothing needs re-syncing.
+- Check which one is running with `curl -s http://127.0.0.1:8000/v1/models`:
 
 ```json
 {"models": [{"name": "laya-typed-decisions",
@@ -109,8 +110,8 @@ To run two checkpoints side by side, start two servers on different ports:
 ./start.sh serve laya-typed-decisions --port 8001 --no-browser --log-file typed.log &
 ```
 
-Give each one its own `--log-file`: two servers sharing the default `server.log` interleave their
-lines and race each other's rotation.
+Give each one its own `--log-file`. Two servers sharing the default `server.log` mix their lines
+together and race each other's rotation.
 
 ### Download without starting
 
@@ -125,20 +126,23 @@ lines and race each other's rotation.
 ==> Cached at /Users/you/.cache/huggingface/hub/models--convaiinnovations--laya-typed-decisions/snapshots/...
 ```
 
-Optional — `serve` and the menu both download on demand. Useful for warming a machine before a demo,
-or downloading on a fast network and running elsewhere.
+Optional — `serve` and the menu both download on demand. It is useful for warming a machine before a
+demo, or downloading on a fast network and running elsewhere.
 
 ### Deleting checkpoints
 
-Option 4 in the menu removes every downloaded Laya checkpoint. It lists what will go and requires
-typing `yes`, because the weights live in the **shared** Hugging Face cache — any other project on
-the machine using the same repos will re-download them.
+Option 4 in the menu removes every downloaded Laya checkpoint.
+
+- It lists what will go and makes you type `yes` first.
+- The weights live in the **shared** Hugging Face cache, so any other project on the machine that
+  uses the same repos will download them again.
 
 ### Client compatibility
 
-Stock Jev clients hard-code `model: "laya"` in the request body, so that value is accepted as an
-alias for whichever checkpoint is loaded — the SDK keeps working after a switch. The loaded
-checkpoint's own name is also accepted. Any other name is a 422.
+- Stock Jev clients hard-code `model: "laya"` in the request body, so that value is accepted as an
+  alias for whichever checkpoint is loaded — the SDK keeps working after a switch.
+- The loaded checkpoint's own name is accepted too.
+- Any other name is a 422.
 
 ### Adding a checkpoint
 
@@ -148,14 +152,15 @@ One entry in `server/registry.py`:
 Model("my-laya", "myorg/my-laya", "ModernBERT-large", 1024, 846, "what it is good at"),
 ```
 
-It then shows up in the `models` menu, in `pull` and in `serve <name>`. The repo must have the same
-layout as the official ones (`rl_agent_config.json`, `model.safetensors`, `tokenizer/`, `encoder/`).
+- It then shows up in the `models` menu, in `pull` and in `serve <name>`.
+- The repo must have the same layout as the official ones: `rl_agent_config.json`,
+  `model.safetensors`, `tokenizer/`, `encoder/`.
 
 ## Startup
 
-First run downloads the checkpoint and takes a few minutes. Later runs touch no network — weights
-resolve from the cache with `local_files_only` — so startup is just the read into RAM, about three
-seconds to a serving port:
+- The first run downloads the checkpoint and takes a few minutes.
+- Later runs touch no network — weights resolve from the cache with `local_files_only` — so startup
+  is just the read into RAM, about three seconds to a serving port:
 
 ```
 ==> Loading laya (846 MB) into memory
@@ -182,15 +187,15 @@ On start it prints every endpoint it serves:
       export TYPESAFE_API_KEY=local
 ```
 
-There is **one server and one port** — the UI and the API are routes on the same FastAPI process, so
-the UI needs no CORS and no second address. `--host 0.0.0.0` exposes it on the LAN instead of
-loopback only.
+- There is **one server and one port**. The UI and the API are routes on the same FastAPI process, so
+  the UI needs no CORS and no second address.
+- `--host 0.0.0.0` puts it on the LAN instead of loopback only.
 
 ## Throughput
 
-One request is in the model at a time. A `threading.Lock` around inference makes that explicit, and
-on Apple Silicon it is **required, not a tuning choice**: two threads inside a forward pass abort the
-process outright with `failed assertion ... IOGPUMetalCommandBuffer`. Do not remove it.
+- One request is inside the model at a time, behind a `threading.Lock`.
+- On Apple Silicon that lock is **required, not a tuning choice**: two threads inside a forward pass
+  abort the process outright with `failed assertion ... IOGPUMetalCommandBuffer`. Do not remove it.
 
 Measured on an M-series Mac, one `noul` question, 846 MB `laya` checkpoint:
 
@@ -200,14 +205,14 @@ Measured on an M-series Mac, one `noul` question, 846 MB `laya` checkpoint:
 | MPS, two processes on two ports | ~106 req/s | ~16 ms |
 | CPU, one process | ~16 req/s | ~63 ms |
 
-More questions in one call are nearly free — they share a single forward pass, so five questions
-cost about 40 ms rather than five times 16 ms. Put related questions in one request rather than
-fanning out into several.
-
-To go past one process, run several servers on different ports behind a load balancer, each with its
-own `--log-file`; every worker holds its own copy of the weights, so budget the checkpoint size per
-process. Batching concurrent requests into one forward pass would reach roughly 230 req/s, but the
-batch dimension is not exposed by `laya`'s public API, so this server does not attempt it.
+- Extra questions in one call are nearly free — they share a single forward pass, so five questions
+  cost about 40 ms rather than five times 16 ms. Put related questions in one request instead of
+  fanning out into several.
+- To go past one process, run several servers on different ports behind a load balancer, each with
+  its own `--log-file`. Every worker holds its own copy of the weights, so budget the checkpoint size
+  per process.
+- Batching concurrent requests into one forward pass would reach roughly 230 req/s, but `laya` does
+  not expose the batch dimension in its public API, so this server does not attempt it.
 
 ## Model weights
 
@@ -217,13 +222,12 @@ Weights live in the shared Hugging Face cache, not in the repo:
 ~/.cache/huggingface/hub/models--convaiinnovations--laya/
 ```
 
-The large files are content-addressed and symlinked, so several projects on the same machine share
-one copy, and each checkpoint lives under its own `models--convaiinnovations--*` directory. To put
-the cache elsewhere, set `HF_HOME` (moves the whole HF directory) or `HF_HUB_CACHE` (moves only the
-model cache) before running `./start.sh`.
-
-If the weights are missing and the machine is offline, startup fails with an explicit message rather
-than a silent stall.
+- The large files are content-addressed and symlinked, so several projects on one machine share a
+  single copy, and each checkpoint sits under its own `models--convaiinnovations--*` directory.
+- To put the cache elsewhere, set `HF_HOME` (moves the whole HF directory) or `HF_HUB_CACHE` (moves
+  only the model cache) before running `./start.sh`.
+- If the weights are missing and the machine is offline, startup fails with a clear message rather
+  than stalling silently.
 
 ## Manual run
 
@@ -238,10 +242,10 @@ uv run python -m uvicorn server.api:app --port 8000   # bare ASGI app, default c
 | file | role |
 |---|---|
 | `start.sh`, `start.ps1` | thin wrappers: install uv, `uv sync`, hand off to the CLI |
-| `server/cli.py` | the `models` menu, `pull` and `serve`; port binding, browser, startup banner |
+| `server/cli.py` | the `models` menu, `pull` and `serve`; port binding, logging, browser, startup banner |
 | `server/registry.py` | the checkpoint table and the download / cache / delete helpers |
 | `server/presets.py` | the five examples: Laya's question sets plus a sample state for each |
-| `server/api.py` | FastAPI app: routing, validation, 422 shaping, Jev↔Laya adapting, inference |
+| `server/api.py` | FastAPI app: routing, validation, error shaping, Jev↔Laya adapting, inference |
 | `server/static/demo.html` | the web UI — one file, no build step; the JSON editor pulls CodeMirror from esm.sh at runtime |
 | `pyproject.toml`, `uv.lock` | pinned dependency set |
 | `verify_sdk.py` | round-trip check against the real `typesafe-sdk` client |
@@ -266,7 +270,7 @@ Request:
 | `model` | string | the loaded checkpoint's name, or the alias `laya`; anything else is a 422 |
 | `questions` | object | question name → question, at least one |
 
-Question types (all take an optional `instructions`, a string, object or array):
+Question types — all take an optional `instructions`, which may be a string, object or array:
 
 | `type` | `criteria` | answer fields |
 |---|---|---|
@@ -274,12 +278,15 @@ Question types (all take an optional `instructions`, a string, object or array):
 | `choice` | `{label: description-or-null}`, at least two | `choice`, `probabilities`, `confidence` |
 | `score` | ordered list of at least two level descriptions | `score` (expected level), `legend`, `probabilities`, `confidence` |
 
-Response: `{"model": ..., "answers": {name: answer}, "usage": {"input_tokens": n, "output_tokens": 0}}`.
-Every answer also carries `action.act_probability` — a Laya-specific extra that Jev clients ignore.
+Response and errors:
 
-Every error shares one shape, `{"detail": [{"loc": [...], "msg": ..., "type": ...}]}`: 422 for a
-validation failure or an unservable `model`, 404 and 405 for routing, and 500 — always the fixed
-`"internal error"` — for anything unexpected.
+- A reply is `{"model": ..., "answers": {name: answer}, "usage": {"input_tokens": n, "output_tokens": 0}}`.
+- Every answer also carries `action.act_probability` — a Laya extra that Jev clients ignore.
+- Every error uses one shape, `{"detail": [{"loc": [...], "msg": ..., "type": ...}]}`:
+  - **422** — a validation failure, or a `model` this server does not serve.
+  - **404** and **405** — routing.
+  - **500** — anything unexpected. The message is always the fixed `"internal error"`; the real one
+    goes to the log file.
 
 ### Example
 
@@ -320,26 +327,32 @@ The left column holds a **Request** panel and an **Examples** panel. Request has
 in its header:
 
 - **UI** — the *state* textarea plus one editable card per question; `+ noul` / `+ choice` / `+ score`
-  append a new one.
+  add a new one.
 - **JSON** — the same request as raw JSON in a CodeMirror editor, with syntax highlighting, folding
   and inline parse errors. Edits round-trip back into the UI view.
 
-**Examples** loads one of five ready-made requests — it fills both the state box and the question
-set, so picking one and pressing Send gives a real answer with nothing to type. The question sets are
-Laya's built-in ones, read live from the installed package; the sample states are this project's,
-since `laya` ships questions only. Edit either afterwards. Send with the **Send** button or
-⌘/Ctrl+Enter from the state box.
+**Examples** loads one of five ready-made requests:
 
-The right pane is a log of decisions — each turn sends one *state* and renders a card per question:
-ranked probability bars for `choice`, a legend strip with the expected-value marker for `score`, a
-0–1 gauge for `noul`, plus confidence, `act_probability` and the input-token count. Turns are
-independent; Laya has no memory. The question set, the current state and the last 30 turns live in
-`localStorage`.
+- It fills both the state box and the question set, so picking one and pressing Send gives a real
+  answer with nothing to type.
+- The question sets are Laya's built-in ones, read live from the installed package. The sample states
+  are this project's, since `laya` ships questions only.
+- Edit either afterwards. Send with the **Send** button, or ⌘/Ctrl+Enter from the state box.
 
-CodeMirror is loaded from esm.sh on demand. If that CDN is unreachable the UI view works normally and
-the JSON view reports `JSON editor unavailable`; nothing else needs a network.
+The right pane is a log of decisions. Each turn sends one *state* and draws a card per question:
 
-Two routes serve the UI and are **outside the Jev contract**:
+- ranked probability bars for `choice`
+- a legend strip with the expected-value marker for `score`
+- a 0–1 gauge for `noul`
+- confidence, `act_probability` and the input-token count on all three
+
+Turns are independent — Laya has no memory. The question set, the current state and the last 30 turns
+live in `localStorage`.
+
+CodeMirror loads from esm.sh on demand. If that CDN is unreachable the UI view works normally and the
+JSON view reports `JSON editor unavailable`; nothing else needs a network.
+
+Two routes serve the UI and sit **outside the Jev contract**:
 
 | route | returns |
 |---|---|
@@ -347,8 +360,9 @@ Two routes serve the UI and are **outside the Jev contract**:
 | `GET /ui/presets` | the five examples — `triage`, `router`, `moderation`, `guard`, `email` — each `{state, questions}` |
 
 `GET /` is a health check, also outside the Jev contract: `{"status": "ok", "model": "laya", "ui":
-"/demo"}`. It answers only once the model is loaded, because uvicorn binds the socket after the
-startup hook — so a 200 there means the server is ready to decide, not merely running.
+"/demo"}`. It answers only once the model is loaded — the CLI claims the socket up front, but uvicorn
+starts accepting on it only after the startup hook finishes. So a 200 there means the server is ready
+to decide, not merely running.
 
 ## Using the official clients
 
@@ -359,8 +373,8 @@ export TYPESAFE_API_KEY=local
 export TYPESAFE_BASE_URL=http://127.0.0.1:8000
 ```
 
-`verify_sdk.py` is a round-trip check that exercises all three question types through the real SDK
-(which parses responses in strict mode):
+`verify_sdk.py` is a round-trip check that exercises all three question types through the real SDK,
+which parses responses in strict mode:
 
 ```sh
 uv run --extra dev python verify_sdk.py
@@ -368,29 +382,30 @@ uv run --extra dev python verify_sdk.py
 
 ## Differences from hosted Jev
 
-- **`instructions` is optional in Jev but required by Laya.** When omitted, the server substitutes the
-  humanized question name (`is_urgent` → `is urgent`).
-- Answers are a **superset** of Jev's — `action.act_probability` on every answer, `confidence` on `noul`.
-- `usage.input_tokens` is a real token count; `output_tokens` is always 0 (nothing is generated).
-- **The context is shared by the state and all questions combined**, and it truncates silently —
-  512 tokens on `laya`, 1024 on the other two. Long states with many questions lose the tail.
-- Requests are serialized — one forward pass at a time, queued in order of arrival.
-- Answer quality, calibration and language coverage are Laya's, not Jev's; the two are not comparable.
+- **`instructions` is optional in Jev but required by Laya.** When it is left out, the server uses the
+  humanized question name instead (`is_urgent` → `is urgent`).
+- Answers are a **superset** of Jev's — `action.act_probability` on every answer, and `confidence` on
+  `noul`.
+- `usage.input_tokens` is a real token count. `output_tokens` is always 0, since nothing is generated.
+- **The state and all questions share one context**, and it truncates silently — 512 tokens on `laya`,
+  1024 on the other two. A long state with many questions loses the tail.
+- Requests are serialized: one forward pass at a time, in order of arrival.
+- Answer quality, calibration and language coverage are Laya's, not Jev's. The two are not comparable.
 
 ## Platform support
 
-macOS and Linux are tested. On Linux `torch` resolves to the CPU build from
-`download.pytorch.org/whl/cpu` — PyPI's Linux wheel pulls the whole CUDA toolkit, several GB, which
-is wasted on a 421M-parameter model doing one forward pass at a time. For a GPU box, sync against
-the matching CUDA index instead of `whl/cpu` in `pyproject.toml`.
-
-Windows should work — the CLI is pure Python and `start.ps1` mirrors `start.sh` — but it is
-untested, and the `torch==2.14.0` Windows wheel has not been verified.
+- macOS and Linux are tested.
+- On Linux, `torch` resolves to the CPU build from `download.pytorch.org/whl/cpu`. PyPI's Linux wheel
+  pulls in the whole CUDA toolkit — several GB — which is wasted on a 421M-parameter model doing one
+  forward pass at a time. For a GPU box, sync against the matching CUDA index instead of `whl/cpu` in
+  `pyproject.toml`.
+- Windows should work, since the CLI is pure Python and `start.ps1` mirrors `start.sh`, but it is
+  untested and the `torch==2.14.0` Windows wheel has not been verified.
 
 ## Provenance
 
-Laya is by Convai Innovations (Apache-2.0). The Jev API
-shape is TypeSafe's; this project is not affiliated with TypeSafe and uses none of their code or weights.
+Laya is by Convai Innovations (Apache-2.0). The Jev API shape is TypeSafe's. This project is not
+affiliated with TypeSafe and uses none of their code or weights.
 
 ## License
 
