@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import logging
+import logging.handlers
 import socket
 import sys
 import threading
@@ -13,12 +15,14 @@ import webbrowser
 
 from .registry import DEFAULT_MODEL, MODELS, Model, cached_path, cached_repos, delete_cached, download, resolve
 
+DEFAULT_LOG = "server.log"
+
 
 def bind(host: str, port: int | None, tries: int = 50) -> tuple[socket.socket, int]:
     """Claim the port up front and hand the listening socket to uvicorn.
 
     Checking a port and then letting uvicorn bind it leaves a window where something else takes it,
-    after a 45-second model load. Binding here means a busy port fails in the first second instead.
+    after the model load. Binding here means a busy port fails in the first second instead.
     """
     candidates = [port] if port is not None else range(8000, 8000 + tries)
     family = socket.AF_INET6 if ":" in host else socket.AF_INET
@@ -36,6 +40,27 @@ def bind(host: str, port: int | None, tries: int = 50) -> tuple[socket.socket, i
     if port is not None:
         raise SystemExit(f"port {port} is already in use on {host}; pick another with --port")
     raise SystemExit(f"no free port in 8000..{8000 + tries - 1}")
+
+
+def configure_logging(path: str) -> None:
+    """Everything at INFO to the file, warnings and worse to the console.
+
+    uvicorn's own config sets propagate=False on its loggers and would keep access lines away from
+    the root handlers, so `serve` passes log_config=None and lets this own the formatting instead.
+    """
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    fmt = logging.Formatter("%(asctime)s %(levelname)-8s %(name)s  %(message)s")
+
+    file = logging.handlers.RotatingFileHandler(path, maxBytes=5_000_000, backupCount=3, encoding="utf-8")
+    file.setLevel(logging.INFO)
+    file.setFormatter(fmt)
+
+    console = logging.StreamHandler()
+    console.setLevel(logging.WARNING)
+    console.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+
+    root.handlers = [file, console]
 
 
 def rows() -> list[tuple[Model, str]]:
@@ -80,6 +105,7 @@ def cmd_models(args: argparse.Namespace) -> None:
         port=args.port,
         fixed_port=args.port is not None,
         open_browser=not args.no_browser,
+        log_file=args.log_file,
     )
 
 
@@ -112,14 +138,18 @@ def cmd_serve(args: argparse.Namespace) -> None:
         port=args.port,
         fixed_port=args.port is not None,
         open_browser=not args.no_browser,
+        log_file=args.log_file,
     )
 
 
-def serve(model: Model, *, host: str, port: int | None, fixed_port: bool, open_browser: bool) -> None:
+def serve(
+    model: Model, *, host: str, port: int | None, fixed_port: bool, open_browser: bool, log_file: str = DEFAULT_LOG
+) -> None:
     import uvicorn
 
     from . import api
 
+    configure_logging(log_file)
     api.use_model(model)
     sock, port = bind(host, port if fixed_port else None)
     # 0.0.0.0 and :: are bind addresses, not connectable ones (Windows rejects them outright).
@@ -133,12 +163,13 @@ def serve(model: Model, *, host: str, port: int | None, fixed_port: bool, open_b
     print(f"==> Loading {model.name} ({model.size_mb} MB) into memory", flush=True)
 
     threading.Thread(
-        target=_announce_when_ready, args=(url_host, port, model.name, open_browser), daemon=True
+        target=_announce_when_ready, args=(url_host, port, model.name, open_browser, log_file), daemon=True
     ).start()
-    uvicorn.Server(uvicorn.Config(api.app, log_level="warning")).run(sockets=[sock])
+    config = uvicorn.Config(api.app, log_config=None, log_level="info")
+    uvicorn.Server(config).run(sockets=[sock])
 
 
-def banner(host: str, port: int, model_name: str) -> str:
+def banner(host: str, port: int, model_name: str, log_file: str) -> str:
     base = f"http://{host}:{port}"
     return "\n".join(
         [
@@ -160,13 +191,15 @@ def banner(host: str, port: int, model_name: str) -> str:
             f"      export TYPESAFE_BASE_URL={base}",
             "      export TYPESAFE_API_KEY=local",
             "",
+            f"    Logging to {log_file} (warnings and errors also go to this console).",
+            "",
             "    Ctrl-C to stop.",
             "",
         ]
     )
 
 
-def _announce_when_ready(host: str, port: int, model_name: str, open_browser: bool) -> None:
+def _announce_when_ready(host: str, port: int, model_name: str, open_browser: bool, log_file: str) -> None:
     """uvicorn accepts on the pre-bound socket only once the model is loaded, so a 200 means ready."""
     base = f"http://{host}:{port}"
     deadline = time.monotonic() + 900
@@ -178,7 +211,7 @@ def _announce_when_ready(host: str, port: int, model_name: str, open_browser: bo
             time.sleep(0.5)
     else:
         return
-    print(banner(host, port, model_name), flush=True)
+    print(banner(host, port, model_name, log_file), flush=True)
     if open_browser:
         webbrowser.open(f"{base}/demo")
 
@@ -192,6 +225,7 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--host", default="127.0.0.1", help="bind address (default: 127.0.0.1)")
         p.add_argument("--port", type=int, help="port to use (default: the first free one from 8000)")
         p.add_argument("--no-browser", action="store_true", help="do not open a browser")
+        p.add_argument("--log-file", default=DEFAULT_LOG, help=f"request and error log (default: {DEFAULT_LOG})")
 
     add_serve_options(parser)
 

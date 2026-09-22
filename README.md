@@ -41,9 +41,13 @@ laya-server serve [model]        # serve a named checkpoint
 laya-server pull [model...]      # download without starting (no name = all)
 ```
 
-Three options, shared by all of them: `--host` (default `127.0.0.1`), `--port` (default: the first
-free port from 8000) and `--no-browser`. An explicit `--port` is used as given — if it is busy the
-command fails immediately rather than drifting to another port.
+Four options, shared by all of them: `--host` (default `127.0.0.1`), `--port` (default: the first
+free port from 8000), `--no-browser`, and `--log-file` (default `server.log`). An explicit `--port`
+is used as given — if it is busy the command fails immediately rather than drifting to another port.
+
+Requests, startup and shutdown lines, and full tracebacks for any 500 go to the log file at INFO,
+rotating at 5 MB and keeping three older files. The console stays quiet: only warnings and errors.
+Clients never see an internal error message — the log file is the only place they appear.
 
 ## Models
 
@@ -101,9 +105,12 @@ curl -s http://127.0.0.1:8000/v1/models
 To run two checkpoints side by side, start two servers on different ports:
 
 ```sh
-./start.sh serve laya --port 8000 --no-browser &
-./start.sh serve laya-typed-decisions --port 8001 --no-browser &
+./start.sh serve laya --port 8000 --no-browser --log-file laya.log &
+./start.sh serve laya-typed-decisions --port 8001 --no-browser --log-file typed.log &
 ```
+
+Give each one its own `--log-file`: two servers sharing the default `server.log` interleave their
+lines and race each other's rotation.
 
 ### Download without starting
 
@@ -147,7 +154,8 @@ layout as the official ones (`rl_agent_config.json`, `model.safetensors`, `token
 ## Startup
 
 First run downloads the checkpoint and takes a few minutes. Later runs touch no network — weights
-resolve from the cache with `local_files_only` — so startup is just the read into RAM:
+resolve from the cache with `local_files_only` — so startup is just the read into RAM, about three
+seconds to a serving port:
 
 ```
 ==> Loading laya (846 MB) into memory
@@ -177,6 +185,29 @@ On start it prints every endpoint it serves:
 There is **one server and one port** — the UI and the API are routes on the same FastAPI process, so
 the UI needs no CORS and no second address. `--host 0.0.0.0` exposes it on the LAN instead of
 loopback only.
+
+## Throughput
+
+One request is in the model at a time. A `threading.Lock` around inference makes that explicit, and
+on Apple Silicon it is **required, not a tuning choice**: two threads inside a forward pass abort the
+process outright with `failed assertion ... IOGPUMetalCommandBuffer`. Do not remove it.
+
+Measured on an M-series Mac, one `noul` question, 846 MB `laya` checkpoint:
+
+| | throughput | per request |
+|---|---|---|
+| MPS, one process | ~60 req/s | ~16 ms |
+| MPS, two processes on two ports | ~106 req/s | ~16 ms |
+| CPU, one process | ~16 req/s | ~63 ms |
+
+More questions in one call are nearly free — they share a single forward pass, so five questions
+cost about 40 ms rather than five times 16 ms. Put related questions in one request rather than
+fanning out into several.
+
+To go past one process, run several servers on different ports behind a load balancer, each with its
+own `--log-file`; every worker holds its own copy of the weights, so budget the checkpoint size per
+process. Batching concurrent requests into one forward pass would reach roughly 230 req/s, but the
+batch dimension is not exposed by `laya`'s public API, so this server does not attempt it.
 
 ## Model weights
 
@@ -246,7 +277,9 @@ Question types (all take an optional `instructions`, a string, object or array):
 Response: `{"model": ..., "answers": {name: answer}, "usage": {"input_tokens": n, "output_tokens": 0}}`.
 Every answer also carries `action.act_probability` — a Laya-specific extra that Jev clients ignore.
 
-Validation failures return HTTP 422 with `{"detail": [{"loc": [...], "msg": ..., "type": ...}]}`.
+Every error shares one shape, `{"detail": [{"loc": [...], "msg": ..., "type": ...}]}`: 422 for a
+validation failure or an unservable `model`, 404 and 405 for routing, and 500 — always the fixed
+`"internal error"` — for anything unexpected.
 
 ### Example
 

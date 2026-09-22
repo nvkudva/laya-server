@@ -13,6 +13,8 @@ import laya
 from fastapi import Body, FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from transformers.initialization import no_init_weights
 
 from .presets import examples
 from .registry import DEFAULT_MODEL, Model, download, resolve
@@ -55,6 +57,8 @@ class SystemOneRequest(BaseModel):
     questions: dict[str, Question] = Field(min_length=1)
 
 
+# One forward pass at a time. On MPS this is a correctness requirement, not a throttle: concurrent
+# forwards abort the process with a Metal command-buffer assertion. See "Throughput" in the README.
 _lock = threading.Lock()
 _agent = None
 _model: Model = resolve(DEFAULT_MODEL)
@@ -79,7 +83,11 @@ def use_model(model: Model) -> None:
 def agent():
     global _agent
     if _agent is None:
-        _agent = laya.load(download(_model))
+        # from_config randomly initialises the encoder, and load_state_dict(strict=True) then
+        # overwrites every tensor of it — 24 seconds of throwaway work. Skipping the init is safe
+        # precisely because that load is strict. Not public API, hence the pinned transformers.
+        with no_init_weights():
+            _agent = laya.load(download(_model))
     return _agent
 
 
@@ -142,6 +150,16 @@ def system_one(req: Annotated[SystemOneRequest, Body()]) -> Any:
         return _invalid(["body", "questions"], str(exc))
     result["model"] = _model.name
     return result
+
+
+@app.exception_handler(StarletteHTTPException)
+def _http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    """Starlette answers 404/405 with a bare string; give them the same shape as every other error."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": [{"loc": [], "msg": exc.detail, "type": "http_error"}]},
+        headers=exc.headers,  # 405 carries Allow
+    )
 
 
 @app.exception_handler(Exception)
