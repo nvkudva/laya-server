@@ -197,7 +197,7 @@ On start it prints every endpoint it serves:
 - On Apple Silicon that lock is **required, not a tuning choice**: two threads inside a forward pass
   abort the process outright with `failed assertion ... IOGPUMetalCommandBuffer`. Do not remove it.
 
-Measured on an M-series Mac, one `noul` question, 846 MB `laya` checkpoint:
+Measured on an M3 Max, one `noul` question, 846 MB `laya` checkpoint:
 
 | | throughput | per request |
 |---|---|---|
@@ -205,14 +205,18 @@ Measured on an M-series Mac, one `noul` question, 846 MB `laya` checkpoint:
 | MPS, two processes on two ports | ~106 req/s | ~16 ms |
 | CPU, one process | ~16 req/s | ~63 ms |
 
-- Extra questions in one call are nearly free — they share a single forward pass, so five questions
-  cost about 40 ms rather than five times 16 ms. Put related questions in one request instead of
-  fanning out into several.
+- Extra questions in one call are nearly free in time — they ride one batched forward pass, so five
+  questions cost about 40 ms rather than five times 16 ms. Put related questions in one request
+  instead of fanning out into several. They are not free in tokens: each question carries its own
+  copy of the state.
 - To go past one process, run several servers on different ports behind a load balancer, each with
   its own `--log-file`. Every worker holds its own copy of the weights, so budget the checkpoint size
   per process.
 - Batching concurrent requests into one forward pass would reach roughly 230 req/s, but `laya` does
   not expose the batch dimension in its public API, so this server does not attempt it.
+- These are M3 Max figures. A base M2 has a quarter of the GPU cores, so expect nearer 40–60 ms per
+  request. Memory does not change with the machine: about 2.2 GB of unified memory once loaded,
+  peaking near 3.3 GB on a request with many full-length questions.
 
 ## Model weights
 
@@ -266,7 +270,7 @@ Request:
 
 | field | type | notes |
 |---|---|---|
-| `state` | string \| object \| array | the content every question refers to; silently truncated to the checkpoint's context window |
+| `state` | string \| object \| array | the content every question refers to; re-encoded per question and silently truncated — see [Differences from hosted Jev](#differences-from-hosted-jev) |
 | `model` | string | the loaded checkpoint's name, or the alias `laya`; anything else is a 422 |
 | `questions` | object | question name → question, at least one |
 
@@ -386,9 +390,13 @@ uv run --extra dev python verify_sdk.py
   humanized question name instead (`is_urgent` → `is urgent`).
 - Answers are a **superset** of Jev's — `action.act_probability` on every answer, and `confidence` on
   `noul`.
-- `usage.input_tokens` is a real token count. `output_tokens` is always 0, since nothing is generated.
-- **The state and all questions share one context**, and it truncates silently — 512 tokens on `laya`,
-  1024 on the other two. A long state with many questions loses the tail.
+- `usage.input_tokens` is a real token count, summed over every question. `output_tokens` is always
+  0, since nothing is generated.
+- **Each question is encoded on its own, with its own copy of the state**, and long input truncates
+  silently. Per question the budget is 512 tokens on `laya` and 1024 on the other two: the
+  instructions and option labels share the first 192, and the state takes what is left — roughly 320
+  on `laya` — losing its tail beyond that. Adding questions never shrinks the state's budget, but it
+  does multiply `input_tokens`, since each carries the state again.
 - Requests are serialized: one forward pass at a time, in order of arrival.
 - Answer quality, calibration and language coverage are Laya's, not Jev's. The two are not comparable.
 
