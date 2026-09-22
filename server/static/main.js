@@ -232,7 +232,7 @@ function adoptPreset(set) {
   paintEditor();
 }
 
-let qView = store.get("laya.qview", "ui");
+let qView = "ui";
 
 /** JSON view text → the sidebar's fields. Shows the error and returns false when it isn't a request. */
 function applyJsonView() {
@@ -280,7 +280,6 @@ function setView(mode) {
   if (qView === "json" && !applyJsonView()) return;
   requestError.hidden = true;
   qView = mode;
-  store.set("laya.qview", qView);
   paintEditor();
 }
 
@@ -472,6 +471,8 @@ function renderLog() {
   }
   openIndex = history.length - 1;
   log.innerHTML = html`${history.map(turnMarkup)}`.s;
+  /* Both views ship in the markup, so a restored turn has to be told which one it shows. */
+  log.querySelectorAll(".turn").forEach((el, i) => applyView(el, history[i].view ?? "ui"));
   syncOpen();
 }
 
@@ -502,7 +503,9 @@ async function ask(request) {
   history.push(turn);
   store.set("laya.history", history.slice(-30));
   openIndex = history.length - 1;
-  log.append(node(turnMarkup(turn, openIndex)));
+  const appended = node(turnMarkup(turn, openIndex));
+  log.append(appended);
+  applyView(appended, "ui");
   syncOpen();
   showReadout(turn);
 }
@@ -562,6 +565,11 @@ fetch("/ui/presets").then((r) => r.json()).then((presets) => {
   const sel = $("#preset");
   for (const name of Object.keys(presets)) sel.append(node(html`<option value="${name}">${name}</option>`));
   sel.onchange = () => { if (sel.value) adoptExample(presets[sel.value]); sel.value = ""; };
+  // The first visit only opens on the triage example, overwriting whatever the last session left.
+  if (!store.get("laya.visited")) {
+    adoptExample(presets.triage);
+    store.set("laya.visited", true);
+  }
 }).catch(() => {});
 
 /* ------------------------------------------------------------------------------
