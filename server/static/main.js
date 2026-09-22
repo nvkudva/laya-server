@@ -1,18 +1,49 @@
 const $ = (s, r = document) => r.querySelector(s);
-const el = (tag, attrs = {}, ...kids) => {
-  const n = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) {
-    if (k === "class") n.className = v;
-    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
-    else n.setAttribute(k, v);
-  }
-  for (const c of kids.flat()) if (c != null) n.append(c);
-  return n;
-};
 const store = {
   get(k, fb) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fb; } catch { return fb; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
+
+// ---- markup --------------------------------------------------------------
+// Components are functions from state to an HTML string. `html` returns a `Raw`, so a component
+// can be interpolated into another without being escaped twice; everything else is escaped, which
+// is what keeps user text — the state, instructions, question names — from becoming markup.
+
+const ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+class Raw { constructor(s) { this.s = s; } }
+
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ESCAPES[c]);
+
+function slot(v) {
+  if (v == null || v === false) return "";
+  if (v instanceof Raw) return v.s;
+  if (Array.isArray(v)) return v.map(slot).join("");
+  return esc(v);
+}
+
+const html = (strings, ...values) =>
+  new Raw(strings.reduce((out, s, i) => out + s + (i < values.length ? slot(values[i]) : ""), ""));
+
+/** Markup → one detached element, for the places that append rather than replace. */
+function node(markup) {
+  const t = document.createElement("template");
+  t.innerHTML = markup.s;
+  return t.content.firstElementChild;
+}
+
+/** Replace a container's markup, then put the caret back where it was. Adding or removing a row
+    rebuilds the list, and without this the field being edited loses focus and selection. */
+function mount(host, markup) {
+  const a = document.activeElement;
+  const key = a?.dataset?.key;
+  const caret = a?.selectionStart ?? null;
+  host.innerHTML = markup.s;
+  if (!key) return;
+  const next = host.querySelector(`[data-key="${CSS.escape(key)}"]`);
+  if (!next) return;
+  next.focus();
+  if (caret != null && next.setSelectionRange) next.setSelectionRange(caret, caret);
+}
 
 // ---- theme ---------------------------------------------------------------
 
@@ -42,6 +73,7 @@ const DEFAULT_SET = [
 ];
 
 let questions = store.get("laya.questions", DEFAULT_SET);
+const save = () => store.set("laya.questions", questions);
 
 const MODEL = "laya";
 const stateBox = $("#state");
@@ -85,70 +117,50 @@ function blankFor(type) {
   };
 }
 
-function renderEditor() {
-  const host = $("#questions");
-  host.replaceChildren(...questions.map((q, i) => {
-    const save = () => store.set("laya.questions", questions);
-    const head = el("div", { class: "row" },
-      el("input", { name: "name", placeholder: "question_name", value: q.name,
-        oninput: (e) => { q.name = e.target.value; save(); } }),
-      el("span", { class: "meta" }, q.type),
-      el("button", { class: "ghost x", type: "button",
-        onclick: () => { questions.splice(i, 1); save(); renderEditor(); } }, "✕"));
+/** One question card. Every input carries a `data-field` path into `questions`, which is how the
+    delegated handler below writes back without a closure per node. */
+function questionMarkup(q, i) {
+  // Raw: these are attributes spliced mid-tag, so they must not be escaped as text.
+  const field = (path) => html`data-field="${i}.${path}" data-key="${i}.${path}"`;
+  const remove = (act, j) => html`
+    <button class="ghost x" type="button" data-act="${act}" data-i="${i}" data-j="${j}"
+            data-key="${act}-${i}-${j}">✕</button>`;
 
-    const instr = el("textarea", { placeholder: "instructions" });
-    instr.value = q.instructions;
-    instr.addEventListener("input", (e) => { q.instructions = e.target.value; save(); });
+  const parts = [html`
+    <div class="row">
+      <input name="name" placeholder="question_name" value="${q.name}" ${field("name")}>
+      <span class="meta">${q.type}</span>
+      ${remove("del-question", 0)}
+    </div>
+    <textarea placeholder="instructions" ${field("instructions")}>${q.instructions}</textarea>`];
 
-    const parts = [head, instr];
-
-    if (q.type === "choice") {
-      parts.push(el("label", {}, "criteria — label : description"));
-      q.criteria.forEach((pair, j) => {
-        parts.push(el("div", { class: "crit" },
-          el("input", { class: "label", placeholder: "label", value: pair[0],
-            oninput: (e) => { pair[0] = e.target.value; save(); } }),
-          el("input", { placeholder: "description (optional)", value: pair[1] ?? "",
-            oninput: (e) => { pair[1] = e.target.value; save(); } }),
-          el("button", { class: "ghost x", type: "button",
-            onclick: () => { q.criteria.splice(j, 1); save(); renderEditor(); } }, "✕")));
-      });
-      parts.push(el("button", { class: "ghost", type: "button",
-        onclick: () => { q.criteria.push(["", ""]); save(); renderEditor(); } }, "+ option"));
-    } else if (q.type === "score") {
-      parts.push(el("label", {}, "criteria — lowest rung first"));
-      q.criteria.forEach((rung, j) => {
-        parts.push(el("div", { class: "crit" },
-          el("input", { placeholder: `rung ${j}`, value: rung,
-            oninput: (e) => { q.criteria[j] = e.target.value; save(); } }),
-          el("button", { class: "ghost x", type: "button",
-            onclick: () => { q.criteria.splice(j, 1); save(); renderEditor(); } }, "✕")));
-      });
-      parts.push(el("button", { class: "ghost", type: "button",
-        onclick: () => { q.criteria.push(""); save(); renderEditor(); } }, "+ rung"));
-    } else {
-      parts.push(el("label", {}, "criteria (optional)"));
-      const [t, f] = [q.criteria[0] ?? "", q.criteria[1] ?? ""];
-      parts.push(el("div", { class: "crit" },
-        el("input", { class: "label", value: "true", disabled: "" }),
-        el("input", { placeholder: "what makes it true", value: t,
-          oninput: (e) => { q.criteria[0] = e.target.value; save(); } })));
-      parts.push(el("div", { class: "crit" },
-        el("input", { class: "label", value: "false", disabled: "" }),
-        el("input", { placeholder: "what makes it false", value: f,
-          oninput: (e) => { q.criteria[1] = e.target.value; save(); } })));
-    }
-    return el("div", { class: "q" }, parts);
-  }));
-  $("#q-count").textContent = `${questions.length} question${questions.length === 1 ? "" : "s"}`;
-
-  const asJson = qView === "json";
-  $("#request-ui").hidden = asJson;
-  qJsonHost.hidden = !asJson;
-  if (asJson) jsonPane.write(JSON.stringify(requestBody({ strict: false }), null, 2));
-  for (const b of document.querySelectorAll("#q-view button")) {
-    b.classList.toggle("is-on", b.dataset.view === qView);
+  if (q.type === "choice") {
+    parts.push(html`<label>criteria — label : description</label>`);
+    q.criteria.forEach((pair, j) => parts.push(html`
+      <div class="crit">
+        <input class="label" placeholder="label" value="${pair[0]}" ${field(`criteria.${j}.0`)}>
+        <input placeholder="description (optional)" value="${pair[1] ?? ""}" ${field(`criteria.${j}.1`)}>
+        ${remove("del-option", j)}
+      </div>`));
+    parts.push(html`<button class="ghost" type="button" data-act="add-option" data-i="${i}" data-key="add-option-${i}">+ option</button>`);
+  } else if (q.type === "score") {
+    parts.push(html`<label>criteria — lowest rung first</label>`);
+    q.criteria.forEach((rung, j) => parts.push(html`
+      <div class="crit">
+        <input placeholder="rung ${j}" value="${rung}" ${field(`criteria.${j}`)}>
+        ${remove("del-rung", j)}
+      </div>`));
+    parts.push(html`<button class="ghost" type="button" data-act="add-rung" data-i="${i}" data-key="add-rung-${i}">+ rung</button>`);
+  } else {
+    parts.push(html`<label>criteria (optional)</label>`);
+    ["true", "false"].forEach((label, j) => parts.push(html`
+      <div class="crit">
+        <input class="label" value="${label}" disabled>
+        <input placeholder="what makes it ${label}" value="${q.criteria[j] ?? ""}" ${field(`criteria.${j}`)}>
+      </div>`));
   }
+
+  return html`<div class="q">${parts}</div>`;
 }
 
 /** Editor rows → the Jev `questions` object. Throws on user error; with `strict: false` it
@@ -189,6 +201,16 @@ function buildQuestions({ strict = true } = {}) {
   return out;
 }
 
+/** Answer to a `data-field` path — "0.criteria.1.0" — written back into `questions`. */
+function setField(path, value) {
+  const parts = path.split(".");
+  const leaf = parts.pop();
+  let at = questions;
+  for (const p of parts) at = at[p];
+  at[leaf] = value;
+  save();
+}
+
 /** Load a named example: its sample state into the textarea, its questions into the editor. */
 function adoptExample(example) {
   stateBox.value = example.state;
@@ -207,7 +229,7 @@ function adoptPreset(set) {
       : [q.criteria?.true ?? "", q.criteria?.false ?? ""],
   }));
   store.set("laya.questions", questions);
-  renderEditor();
+  paintEditor();
 }
 
 let qView = store.get("laya.qview", "ui");
@@ -259,7 +281,20 @@ function setView(mode) {
   requestError.hidden = true;
   qView = mode;
   store.set("laya.qview", qView);
-  renderEditor();
+  paintEditor();
+}
+
+function paintEditor() {
+  mount($("#questions"), html`${questions.map(questionMarkup)}`);
+  $("#q-count").textContent = `${questions.length} question${questions.length === 1 ? "" : "s"}`;
+
+  const asJson = qView === "json";
+  $("#request-ui").hidden = asJson;
+  qJsonHost.hidden = !asJson;
+  if (asJson) jsonPane.write(JSON.stringify(requestBody({ strict: false }), null, 2));
+  for (const b of document.querySelectorAll("#q-view button")) {
+    b.classList.toggle("is-on", b.dataset.view === qView);
+  }
 }
 
 for (const b of document.querySelectorAll("#q-view button")) b.onclick = () => setView(b.dataset.view);
@@ -289,43 +324,59 @@ function summaryFor(a) {
   return a.choice ?? "";
 }
 
-function renderAnswer(name, q, a) {
+function answerMarkup(name, q, a) {
   const data = rowsFor(a);
   const winner = data.reduce((best, r, i) => (r.p > data[best].p ? i : best), 0);
   const act = a.action?.act_probability ?? a.rl_agent?.act_probability;
-  return el("section", { class: "dist" },
-    el("div", { class: "dist-q" },
-      el("span", { class: "dist-instr" }, q?.instructions || name),
-      el("span", { class: "dist-answer" }, summaryFor(a))),
-    el("header", { class: "dist-head" },
-      el("h3", {}, name),
-      el("span", { class: "dist-type" }, a.type)),
-    el("ol", { class: "bars" }, data.map((r, i) =>
-      el("li", { class: i === winner ? "bar-row is-top" : "bar-row", title: `${r.label} — ${r.p.toFixed(4)}` },
-        el("span", { class: "bar-label" }, r.label),
-        el("span", { class: "bar-track" },
-          el("span", { class: "bar-fill", style: `width: max(2px, ${r.p * 100}%)` })),
-        el("span", { class: "bar-value" }, pct(r.p), el("span", { class: "pct" }, "%"))))),
-    el("footer", { class: "dist-foot" },
-      el("span", {}, a.type === "score" ? `expectation, ${data.length} levels`
-        : a.type === "noul" ? "p(true)" : `${data.length} options`),
-      el("span", { class: "dist-meta" },
-        a.confidence != null ? el("span", {}, `confidence ${a.confidence.toFixed(3)}`) : null,
-        act != null ? el("span", {}, `act ${act.toFixed(3)}`) : null)));
+  const foot = a.type === "score" ? `expectation, ${data.length} levels`
+    : a.type === "noul" ? "p(true)" : `${data.length} options`;
+
+  return html`
+    <section class="dist">
+      <div class="dist-q">
+        <span class="dist-instr">${q?.instructions || name}</span>
+        <span class="dist-answer">${summaryFor(a)}</span>
+      </div>
+      <header class="dist-head">
+        <h3>${name}</h3>
+        <span class="dist-type">${a.type}</span>
+      </header>
+      <ol class="bars">
+        ${data.map((r, i) => html`
+        <li class="${i === winner ? "bar-row is-top" : "bar-row"}" title="${r.label} — ${r.p.toFixed(4)}">
+          <span class="bar-label">${r.label}</span>
+          <span class="bar-track">
+            <span class="bar-fill" style="width: max(2px, ${(Number(r.p) * 100).toFixed(4)}%)"></span>
+          </span>
+          <span class="bar-value">${pct(r.p)}<span class="pct">%</span></span>
+        </li>`)}
+      </ol>
+      <footer class="dist-foot">
+        <span>${foot}</span>
+        <span class="dist-meta">
+          ${a.confidence != null ? html`<span>confidence ${a.confidence.toFixed(3)}</span>` : ""}
+          ${act != null ? html`<span>act ${act.toFixed(3)}</span>` : ""}
+        </span>
+      </footer>
+    </section>`;
 }
 
-function renderAnswers(sent, data) {
-  const wrap = el("div", { class: "answers" });
-  for (const [name, a] of Object.entries(data.answers ?? {})) wrap.append(renderAnswer(name, sent[name], a));
-  return wrap;
+function answersMarkup(sent, data) {
+  return html`
+    <div class="answers">
+      ${Object.entries(data.answers ?? {}).map(([name, a]) => answerMarkup(name, sent[name], a))}
+    </div>`;
 }
 
-function renderError(detail) {
-  return el("div", { class: "answers" },
-    el("div", { class: "notice" },
-      el("h3", {}, "Request rejected"),
-      (Array.isArray(detail) ? detail : [{ loc: [], msg: String(detail) }]).map((d) =>
-        el("div", {}, el("code", {}, (d.loc ?? []).join(".")), ` ${d.msg}`))));
+function errorMarkup(detail) {
+  const list = Array.isArray(detail) ? detail : [{ loc: [], msg: String(detail) }];
+  return html`
+    <div class="answers">
+      <div class="notice">
+        <h3>Request rejected</h3>
+        ${list.map((d) => html`<div><code>${(d.loc ?? []).join(".")}</code> ${d.msg}</div>`)}
+      </div>
+    </div>`;
 }
 
 // ---- conversation --------------------------------------------------------
@@ -342,102 +393,95 @@ let history = store.get("laya.history", []).map((turn) => turn.request ? turn : 
 /* Index of the one expanded turn, 0-based over `history`. -1 means all of them are minimized. */
 let openIndex = -1;
 
+/* Collapse and the UI/JSON switch stay imperative: they only add or lift classes and the `hidden`
+   property, so they never rebuild a turn — and never disturb a selection in the log. */
 function syncOpen() {
-  document.querySelectorAll("#log .turn").forEach((node, i) => {
+  document.querySelectorAll("#log .turn").forEach((el, i) => {
     const open = i === openIndex;
-    node.classList.toggle("is-open", open);
-    const caret = node.querySelector(".turn-caret");
+    el.classList.toggle("is-open", open);
+    const caret = el.querySelector(".turn-caret");
     if (caret) caret.textContent = open ? "▾" : "▸";
   });
 }
 
-function turnHead(turn, index) {
-  const tokens = turn.data?.usage?.input_tokens;
-  const time = turn.at ? new Date(turn.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : null;
-  return el("header", { class: "turn-head" },
-    el("span", { class: "turn-caret" }, "▸"),
-    el("span", {}, `Request #${index + 1}`),
-    time ? el("span", {}, `· ${time}`) : null,
-    el("span", { class: "turn-meta" },
-      tokens >= 450 ? el("span", { class: "turn-warn", title: "Content past the 512-token context limit is silently truncated" }, "⚠ near 512-tok limit") : null,
-      el("span", {}, turn.data ? `${tokens} tok` : turn.pending ? "sending…" : "error"),
-      el("div", { class: "seg turn-view" },
-        el("button", { type: "button", class: "ghost", "data-view": "ui" }, "UI"),
-        el("button", { type: "button", class: "ghost", "data-view": "json" }, "JSON"))));
-}
-
 /* JSON is the wire pair — the request as sent and the reply as received — so the answers block,
    which is only a rendering of `response.answers`, stands down while it is up. */
-function applyView(node, view) {
+function applyView(turnEl, view) {
   const json = view === "json";
-  node.querySelector(".state-text").hidden = json;
-  for (const e of node.querySelectorAll(".state-json, .state-sub, .state-resp")) e.hidden = !json;
-  const answers = node.querySelector(".answers");
+  turnEl.querySelector(".state-text").hidden = json;
+  for (const el of turnEl.querySelectorAll(".state-json, .state-sub, .state-resp")) el.hidden = !json;
+  const answers = turnEl.querySelector(".answers");
   if (answers) answers.hidden = json;
-  for (const b of node.querySelectorAll(".turn-view button[data-view]")) b.classList.toggle("is-on", b.dataset.view === view);
-}
-
-/* Both views are built up front and swapped with `hidden`, so flipping the toggle never rebuilds. */
-function stateRow(turn) {
-  const replied = turn.data !== undefined || turn.error !== undefined;
-  return el("div", { class: "state" },
-    el("div", { class: "state-text" }, turn.request.state),
-    el("pre", { class: "state-json" }, JSON.stringify(turn.request, null, 2)),
-    replied ? el("div", { class: "state-label state-sub" }, "Response") : null,
-    replied ? el("pre", { class: "state-resp" }, JSON.stringify(turn.data ?? { error: turn.error }, null, 2)) : null);
-}
-
-function renderTurn(turn, index) {
-  const tokens = turn.data?.usage?.input_tokens;
-  const node = el("div", { class: "turn" },
-    turnHead(turn, index),
-    stateRow(turn),
-    turn.error ? renderError(turn.error) : renderAnswers(turn.request.questions, turn.data));
-  applyView(node, turn.view ?? "ui");
-
-  node.querySelector(".turn-head").addEventListener("click", (e) => {
-    if (e.target.closest(".turn-view")) return; // the view buttons live in the header, not on it
-    openIndex = openIndex === index ? -1 : index;
-    syncOpen();
-  });
-  node.querySelector(".turn-view").addEventListener("click", (e) => {
-    const btn = e.target.closest("button[data-view]");
-    if (!btn) return;
-    turn.view = btn.dataset.view;
-    applyView(node, turn.view);
-  });
-
-  log.append(node);
-  log.parentElement.scrollTop = log.parentElement.scrollHeight;
-  if (turn.data) {
-    $("#r-model").textContent = turn.data.model;
-    $("#r-tokens").textContent = `${tokens} tok`;
+  for (const b of turnEl.querySelectorAll(".turn-view button[data-view]")) {
+    b.classList.toggle("is-on", b.dataset.view === view);
   }
 }
 
+function turnHeadMarkup(turn, index) {
+  const tokens = turn.data?.usage?.input_tokens;
+  const time = turn.at ? new Date(turn.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : null;
+  return html`
+    <header class="turn-head" data-act="toggle-turn" data-i="${index}">
+      <span class="turn-caret">▸</span>
+      <span>Request #${index + 1}</span>
+      ${time ? html`<span>· ${time}</span>` : ""}
+      <span class="turn-meta">
+        ${tokens >= 450 ? html`<span class="turn-warn" title="Content past the 512-token context limit is silently truncated">⚠ near 512-tok limit</span>` : ""}
+        <span>${turn.data ? `${tokens} tok` : turn.pending ? "sending…" : "error"}</span>
+        <div class="seg turn-view">
+          <button type="button" class="ghost" data-act="turn-view" data-i="${index}" data-view="ui">UI</button>
+          <button type="button" class="ghost" data-act="turn-view" data-i="${index}" data-view="json">JSON</button>
+        </div>
+      </span>
+    </header>`;
+}
+
+/* Both views are in the markup and swapped with `hidden`, so flipping the toggle never rebuilds. */
+function stateRowMarkup(turn) {
+  const replied = turn.data !== undefined || turn.error !== undefined;
+  return html`
+    <div class="state">
+      <div class="state-text">${turn.request.state}</div>
+      <pre class="state-json">${JSON.stringify(turn.request, null, 2)}</pre>
+      ${replied ? html`<div class="state-label state-sub">Response</div>
+      <pre class="state-resp">${JSON.stringify(turn.data ?? { error: turn.error }, null, 2)}</pre>` : ""}
+    </div>`;
+}
+
+function turnMarkup(turn, index) {
+  const body = turn.error ? errorMarkup(turn.error)
+    : turn.data ? answersMarkup(turn.request.questions, turn.data)
+    : html`<div class="turn-pending">thinking…</div>`;
+  return html`<div class="turn">${turnHeadMarkup(turn, index)}${stateRowMarkup(turn)}${body}</div>`;
+}
+
+function showReadout(turn) {
+  if (!turn.data) return;
+  $("#r-model").textContent = turn.data.model;
+  $("#r-tokens").textContent = `${turn.data.usage?.input_tokens} tok`;
+}
+
+const scrollLog = () => { log.parentElement.scrollTop = log.parentElement.scrollHeight; };
+
 function renderLog() {
-  log.replaceChildren();
   if (!history.length) {
-    log.append(el("div", { class: "empty" },
-      "Build a request on the left and press Send. " +
-      "Laya answers every question in one pass — each turn is independent, it has no memory."));
+    log.innerHTML = html`
+      <div class="empty">Build a request on the left and press Send. Laya answers every question in
+      one pass — each turn is independent, it has no memory.</div>`.s;
     return;
   }
   openIndex = history.length - 1;
-  history.forEach(renderTurn);
+  log.innerHTML = html`${history.map(turnMarkup)}`.s;
   syncOpen();
 }
 
 async function ask(request) {
   log.querySelector(".empty")?.remove();
   const at = Date.now();
-  const pendingNode = el("div", { class: "turn" },
-    turnHead({ request, at, pending: true }, history.length),
-    stateRow({ request }),
-    el("div", { class: "turn-pending" }, "thinking…"));
-  applyView(pendingNode, "ui");
-  log.append(pendingNode);
-  log.parentElement.scrollTop = log.parentElement.scrollHeight;
+  const pending = node(turnMarkup({ request, at, pending: true }, history.length));
+  log.append(pending);
+  applyView(pending, "ui");
+  scrollLog();
   /* The new turn opens; every turn before it minimizes. */
   openIndex = history.length;
   syncOpen();
@@ -454,21 +498,50 @@ async function ask(request) {
   } catch (e) {
     turn = { request, error: String(e), at };
   }
-  pendingNode.remove();
+  pending.remove();
   history.push(turn);
   store.set("laya.history", history.slice(-30));
   openIndex = history.length - 1;
-  renderTurn(turn, openIndex);
+  log.append(node(turnMarkup(turn, openIndex)));
   syncOpen();
+  showReadout(turn);
 }
+
+// ---- actions -------------------------------------------------------------
+// One listener for generated markup. A node says what it is with `data-act`; the handler reads
+// its `data-i` / `data-j` / `data-view` rather than closing over a position in the array.
+
+const ACTIONS = {
+  "toggle-turn": (el) => { openIndex = openIndex === Number(el.dataset.i) ? -1 : Number(el.dataset.i); syncOpen(); },
+  "turn-view": (el) => {
+    const turn = history[Number(el.dataset.i)];
+    turn.view = el.dataset.view;
+    applyView(el.closest(".turn"), turn.view);
+  },
+  "del-question": (el) => { questions.splice(Number(el.dataset.i), 1); save(); paintEditor(); },
+  "add-option": (el) => { questions[Number(el.dataset.i)].criteria.push(["", ""]); save(); paintEditor(); },
+  "del-option": (el) => { questions[Number(el.dataset.i)].criteria.splice(Number(el.dataset.j), 1); save(); paintEditor(); },
+  "add-rung": (el) => { questions[Number(el.dataset.i)].criteria.push(""); save(); paintEditor(); },
+  "del-rung": (el) => { questions[Number(el.dataset.i)].criteria.splice(Number(el.dataset.j), 1); save(); paintEditor(); },
+};
+
+document.addEventListener("click", (e) => {
+  const el = e.target.closest("[data-act]");
+  if (el) ACTIONS[el.dataset.act]?.(el);
+});
+
+document.addEventListener("input", (e) => {
+  const el = e.target.closest("[data-field]");
+  if (el) setField(el.dataset.field, el.value);
+});
 
 // ---- wiring --------------------------------------------------------------
 
 const addQuestion = (type) => {
   if (qView === "json" && !applyJsonView()) return;
   questions.push(blankFor(type));
-  renderEditor();
-  [...document.querySelectorAll('#questions input[name="name"]')].pop()?.focus();
+  paintEditor();
+  $(`#questions [data-key="${questions.length - 1}.name"]`)?.focus();
 };
 $("#add-noul").onclick = () => addQuestion("noul");
 $("#add-choice").onclick = () => addQuestion("choice");
@@ -481,25 +554,24 @@ stateBox.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) sendRequest();
 });
 
-renderEditor();
+paintEditor();
 renderLog();
 syncSend();
 
 fetch("/ui/presets").then((r) => r.json()).then((presets) => {
   const sel = $("#preset");
-  for (const name of Object.keys(presets)) sel.append(el("option", { value: name }, name));
+  for (const name of Object.keys(presets)) sel.append(node(html`<option value="${name}">${name}</option>`));
   sel.onchange = () => { if (sel.value) adoptExample(presets[sel.value]); sel.value = ""; };
 }).catch(() => {});
 
 /* ------------------------------------------------------------------------------
-   The JSON pane's CodeMirror instance. A module, because it uses top-level await
-   to import from esm.sh; this file is loaded as one.
+   The JSON pane's CodeMirror instance.
+
+   The same component laya-web uses (see its src/JsonCode.tsx), loaded from esm.sh with every
+   package pinned to the concrete versions esm.sh resolves its own transitive imports to, so there
+   is exactly one copy of @codemirror/state in the graph and the extensions compose.
    ------------------------------------------------------------------------------ */
 
-/* The JSON pane's CodeMirror instance — the same component laya-web uses (see its
- * src/JsonCode.tsx), loaded from esm.sh with every package pinned to the concrete versions
- * esm.sh resolves its own transitive imports to, so there is exactly one copy of
- * @codemirror/state in the graph and the extensions compose. */
 try {
   const [{ EditorView }, { HighlightStyle, syntaxHighlighting }, { tags: t }, { json }, { basicSetup }] =
     await Promise.all([
