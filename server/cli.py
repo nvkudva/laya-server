@@ -63,6 +63,16 @@ def configure_logging(path: str) -> None:
     root.handlers = [file, console]
 
 
+def url_host(host: str) -> str:
+    """The host as it should appear in a URL we print or probe.
+
+    0.0.0.0 and :: are bind addresses, not connectable ones (Windows rejects them outright), and an
+    IPv6 literal needs brackets or the banner prints something unpastable.
+    """
+    probe = "127.0.0.1" if host in ("0.0.0.0", "::", "") else host
+    return f"[{probe}]" if ":" in probe else probe
+
+
 def rows() -> list[tuple[Model, str]]:
     return [(m, "cached" if cached_path(m) else f"{m.size_mb} MB") for m in MODELS.values()]
 
@@ -152,10 +162,7 @@ def serve(
     configure_logging(log_file)
     api.use_model(model)
     sock, port = bind(host, port if fixed_port else None)
-    # 0.0.0.0 and :: are bind addresses, not connectable ones (Windows rejects them outright).
-    probe_host = "127.0.0.1" if host in ("0.0.0.0", "::", "") else host
-    # An IPv6 literal needs brackets to be a URL, or the banner prints something unpastable.
-    url_host = f"[{probe_host}]" if ":" in probe_host else probe_host
+    url = url_host(host)
 
     # The weights load in uvicorn's startup hook; fetch them here so download progress is visible
     # before the server claims a port.
@@ -163,7 +170,7 @@ def serve(
     print(f"==> Loading {model.name} ({model.size_mb} MB) into memory", flush=True)
 
     threading.Thread(
-        target=_announce_when_ready, args=(url_host, port, model.name, open_browser, log_file), daemon=True
+        target=_announce_when_ready, args=(url, port, model.name, open_browser, log_file), daemon=True
     ).start()
     config = uvicorn.Config(api.app, log_config=None, log_level="info")
     uvicorn.Server(config).run(sockets=[sock])

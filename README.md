@@ -315,6 +315,19 @@ uv run python -m uvicorn server.api:app --port 8000   # bare ASGI app, default c
 Once installed with `uv tool install --editable .` — which `./start.sh` offers on a bare run — plain
 `laya-server` works from any directory.
 
+## Tests
+
+```sh
+uv run --extra dev pytest              # the contract and CLI, no weights, about a second
+uv run --extra dev python verify_sdk.py   # a real round trip through the official SDK, needs a running server
+```
+
+`tests/test_contract.py` patches `agent()` out, so the app starts and routes for real while nothing
+is read from disk. It covers what the wire contract promises: the criteria minimums, the accepted
+model aliases (including `typesafe-sdk`'s own default), one error shape across 404, 405, 422 and 500,
+the instructions fallback, and every response validated against TypeSafe's generated schemas. The
+CLI tests cover port handling and address families.
+
 ## Files
 
 | file | role |
@@ -327,6 +340,7 @@ Once installed with `uv tool install --editable .` — which `./start.sh` offers
 | `server/static/demo.html` | the web UI — one file, no build step; the JSON editor pulls CodeMirror from esm.sh at runtime |
 | `pyproject.toml`, `uv.lock` | pinned dependency set |
 | `verify_sdk.py` | round-trip check against the real `typesafe-sdk` client |
+| `tests/test_contract.py` | the wire contract and the CLI, with no checkpoint loaded |
 
 ## API
 

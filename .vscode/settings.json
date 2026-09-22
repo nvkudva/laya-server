@@ -1,0 +1,9 @@
+{
+    "files.exclude": {
+        "__pycache__": true,
+        ".claude": true,
+        ".pytest_cache": true,
+        ".reasonix": true,
+        ".venv": true
+    }
+}

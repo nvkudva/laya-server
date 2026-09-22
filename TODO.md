@@ -9,4 +9,4 @@
 - [ ] throughput-improvement Add `--workers N` to `add_serve_options` in `server/cli.py`, and document that each worker holds its own 846 MB copy of the weights
 - [ ] throughput-improvement Pass the pre-bound socket straight to `Multiprocess(cfg, sockets=[sock])` — it accepts it as-is, no change needed in `bind()`
 - [ ] throughput-improvement Measure two-worker throughput through the real server; the ~106 req/s figure is from two independent processes, never confirmed end to end
-- [ ] Write tests: criteria `min_length`, `models --port`, IPv6 `bind()` — all reachable without the weights (`TestClient(app)` outside a `with` block skips lifespan)
+- [x] Write tests: criteria `min_length`, `models --port`, IPv6 `bind()` — all reachable without the weights (`TestClient(app)` outside a `with` block skips lifespan)
