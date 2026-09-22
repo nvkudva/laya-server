@@ -60,6 +60,42 @@ cd laya-server
 
 See [Models](#models) for the full list and what each one is for.
 
+## Example
+
+One state, three questions of different types, one round trip:
+
+```sh
+curl -s http://127.0.0.1:8000/v1/systemone -H 'content-type: application/json' -d '{
+  "state": "I was charged twice for the same order and nobody answers my emails. I want my money back now.",
+  "model": "laya",
+  "questions": {
+    "area":    {"type":"choice","instructions":"Which product area is this about?","criteria":{"refund & dispute":"A billing dispute or refund request","card":"Anything about a card","other":null}},
+    "urgency": {"type":"score","instructions":"How urgent is this message?","criteria":["Can wait","Needs attention this week","Needs attention today"]},
+    "refund":  {"type":"noul","instructions":"The customer is asking for a refund."}
+  }
+}'
+```
+
+```json
+{
+  "model": "laya",
+  "answers": {
+    "area":    {"type":"choice","choice":"refund & dispute","confidence":0.7228,
+                "probabilities":{"refund & dispute":0.9286,"card":0.0267,"other":0.0447},
+                "action":{"act_probability":1.0}},
+    "urgency": {"type":"score","score":1.9062,"confidence":0.7092,
+                "legend":{"0":"Can wait","1":"Needs attention this week","2":"Needs attention today"},
+                "probabilities":{"0":0.0076,"1":0.0787,"2":0.9137},
+                "action":{"act_probability":1.0}},
+    "refund":  {"type":"noul","noul":0.9321,"confidence":0.9321,"action":{"act_probability":1.0}}
+  },
+  "usage": {"input_tokens": 167, "output_tokens": 0}
+}
+```
+
+Field by field, that is the whole contract — see [API](#api) for the schema and
+[Web UI](#web-ui) for the same thing with nothing to type.
+
 ## CLI
 
 ```sh
@@ -330,36 +366,7 @@ Response and errors:
   - **500** — anything unexpected. The message is always the fixed `"internal error"`; the real one
     goes to the log file.
 
-### Example
-
-```sh
-curl -s http://127.0.0.1:8000/v1/systemone -H 'content-type: application/json' -d '{
-  "state": "I was charged twice for the same order and nobody answers my emails. I want my money back now.",
-  "model": "laya",
-  "questions": {
-    "area":    {"type":"choice","instructions":"Which product area is this about?","criteria":{"refund & dispute":"A billing dispute or refund request","card":"Anything about a card","other":null}},
-    "urgency": {"type":"score","instructions":"How urgent is this message?","criteria":["Can wait","Needs attention this week","Needs attention today"]},
-    "refund":  {"type":"noul","instructions":"The customer is asking for a refund."}
-  }
-}'
-```
-
-```json
-{
-  "model": "laya",
-  "answers": {
-    "area":    {"type":"choice","choice":"refund & dispute","confidence":0.7228,
-                "probabilities":{"refund & dispute":0.9286,"card":0.0267,"other":0.0447},
-                "action":{"act_probability":1.0}},
-    "urgency": {"type":"score","score":1.9062,"confidence":0.7092,
-                "legend":{"0":"Can wait","1":"Needs attention this week","2":"Needs attention today"},
-                "probabilities":{"0":0.0076,"1":0.0787,"2":0.9137},
-                "action":{"act_probability":1.0}},
-    "refund":  {"type":"noul","noul":0.9321,"confidence":0.9321,"action":{"act_probability":1.0}}
-  },
-  "usage": {"input_tokens": 167, "output_tokens": 0}
-}
-```
+A worked call is at the top, under [Example](#example).
 
 ## Web UI
 
