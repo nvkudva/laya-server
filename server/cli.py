@@ -21,8 +21,9 @@ def bind(host: str, port: int | None, tries: int = 50) -> tuple[socket.socket, i
     after a 45-second model load. Binding here means a busy port fails in the first second instead.
     """
     candidates = [port] if port is not None else range(8000, 8000 + tries)
+    family = socket.AF_INET6 if ":" in host else socket.AF_INET
     for candidate in candidates:
-        sock = socket.socket()
+        sock = socket.socket(family)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             sock.bind((host, candidate))
@@ -73,7 +74,13 @@ def cmd_models(args: argparse.Namespace) -> None:
         raise SystemExit(f"not a choice: {choice!r}")
 
     model = listed[int(choice) - 1][0]
-    serve(model, host=args.host, port=args.port, fixed_port=False, open_browser=not args.no_browser)
+    serve(
+        model,
+        host=args.host,
+        port=args.port,
+        fixed_port=args.port is not None,
+        open_browser=not args.no_browser,
+    )
 
 
 def confirm_delete() -> None:
@@ -117,6 +124,8 @@ def serve(model: Model, *, host: str, port: int | None, fixed_port: bool, open_b
     sock, port = bind(host, port if fixed_port else None)
     # 0.0.0.0 and :: are bind addresses, not connectable ones (Windows rejects them outright).
     probe_host = "127.0.0.1" if host in ("0.0.0.0", "::", "") else host
+    # An IPv6 literal needs brackets to be a URL, or the banner prints something unpastable.
+    url_host = f"[{probe_host}]" if ":" in probe_host else probe_host
 
     # The weights load in uvicorn's startup hook; fetch them here so download progress is visible
     # before the server claims a port.
@@ -124,7 +133,7 @@ def serve(model: Model, *, host: str, port: int | None, fixed_port: bool, open_b
     print(f"==> Loading {model.name} ({model.size_mb} MB) into memory", flush=True)
 
     threading.Thread(
-        target=_announce_when_ready, args=(probe_host, port, model.name, open_browser), daemon=True
+        target=_announce_when_ready, args=(url_host, port, model.name, open_browser), daemon=True
     ).start()
     uvicorn.Server(uvicorn.Config(api.app, log_level="warning")).run(sockets=[sock])
 
@@ -158,7 +167,7 @@ def banner(host: str, port: int, model_name: str) -> str:
 
 
 def _announce_when_ready(host: str, port: int, model_name: str, open_browser: bool) -> None:
-    """uvicorn binds the socket only once the model is loaded, so a 200 here means it is ready."""
+    """uvicorn accepts on the pre-bound socket only once the model is loaded, so a 200 means ready."""
     base = f"http://{host}:{port}"
     deadline = time.monotonic() + 900
     while time.monotonic() < deadline:

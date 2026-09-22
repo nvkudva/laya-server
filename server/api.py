@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from .presets import examples
 from .registry import DEFAULT_MODEL, Model, download, resolve
 
-INDEX_HTML = Path(__file__).resolve().parent / "static" / "index.html"
+DEMO_HTML = Path(__file__).resolve().parent / "static" / "demo.html"
 
 JSONContent = str | dict[str, Any] | list[Any]
 
@@ -36,13 +36,13 @@ class NoulQuestion(BaseModel):
 class ChoiceQuestion(BaseModel):
     type: Literal["choice"]
     instructions: JSONContent | None = None
-    criteria: dict[str, JSONContent | None]
+    criteria: dict[str, JSONContent | None] = Field(min_length=2)
 
 
 class ScoreQuestion(BaseModel):
     type: Literal["score"]
     instructions: JSONContent | None = None
-    criteria: list[JSONContent] = Field(min_length=1)
+    criteria: list[JSONContent] = Field(min_length=2)
 
 
 Question = Annotated[NoulQuestion | ChoiceQuestion | ScoreQuestion, Field(discriminator="type")]
@@ -102,23 +102,23 @@ def _to_laya(name: str, q: Question) -> dict[str, Any]:
 
 
 @app.get("/")
-def health() -> dict[str, Any]:
-    """Liveness check. Reachable only once the model is loaded, since uvicorn binds after startup."""
+async def health() -> dict[str, Any]:
+    """Liveness check. The CLI pre-binds the socket, but uvicorn accepts only after the model loads."""
     return {"status": "ok", "model": _model.name, "ui": "/demo"}
 
 
 @app.get("/demo")
-def demo() -> FileResponse:
-    return FileResponse(INDEX_HTML, media_type="text/html")
+async def demo() -> FileResponse:
+    return FileResponse(DEMO_HTML, media_type="text/html")
 
 
 @app.get("/ui/presets")
-def ui_presets() -> dict[str, Any]:
+async def ui_presets() -> dict[str, Any]:
     return examples()
 
 
 @app.get("/v1/models")
-def list_models() -> dict[str, Any]:
+async def list_models() -> dict[str, Any]:
     return {
         "models": [
             {
@@ -146,4 +146,6 @@ def system_one(req: Annotated[SystemOneRequest, Body()]) -> Any:
 
 @app.exception_handler(Exception)
 def _unhandled(request: Request, exc: Exception) -> JSONResponse:
-    return JSONResponse(status_code=500, content={"detail": [{"loc": ["body"], "msg": str(exc), "type": "internal_error"}]})
+    return JSONResponse(
+        status_code=500, content={"detail": [{"loc": ["body"], "msg": "internal error", "type": "internal_error"}]}
+    )

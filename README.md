@@ -211,7 +211,7 @@ uv run python -m uvicorn server.api:app --port 8000   # bare ASGI app, default c
 | `server/registry.py` | the checkpoint table and the download / cache / delete helpers |
 | `server/presets.py` | the five examples: Laya's question sets plus a sample state for each |
 | `server/api.py` | FastAPI app: routing, validation, 422 shaping, Jev↔Laya adapting, inference |
-| `server/static/index.html` | the web UI — one file, no build step; the JSON editor pulls CodeMirror from esm.sh at runtime |
+| `server/static/demo.html` | the web UI — one file, no build step; the JSON editor pulls CodeMirror from esm.sh at runtime |
 | `pyproject.toml`, `uv.lock` | pinned dependency set |
 | `verify_sdk.py` | round-trip check against the real `typesafe-sdk` client |
 
@@ -231,7 +231,7 @@ Request:
 
 | field | type | notes |
 |---|---|---|
-| `state` | string \| object \| array | the content every question refers to |
+| `state` | string \| object \| array | the content every question refers to; silently truncated to the checkpoint's context window |
 | `model` | string | the loaded checkpoint's name, or the alias `laya`; anything else is a 422 |
 | `questions` | object | question name → question, at least one |
 
@@ -240,8 +240,8 @@ Question types (all take an optional `instructions`, a string, object or array):
 | `type` | `criteria` | answer fields |
 |---|---|---|
 | `noul` | optional `{"true": ..., "false": ...}` | `noul` = p(yes), `confidence` |
-| `choice` | `{label: description-or-null}` | `choice`, `probabilities`, `confidence` |
-| `score` | ordered non-empty list of level descriptions | `score` (expected level), `legend`, `probabilities`, `confidence` |
+| `choice` | `{label: description-or-null}`, at least two | `choice`, `probabilities`, `confidence` |
+| `score` | ordered list of at least two level descriptions | `score` (expected level), `legend`, `probabilities`, `confidence` |
 
 Response: `{"model": ..., "answers": {name: answer}, "usage": {"input_tokens": n, "output_tokens": 0}}`.
 Every answer also carries `action.act_probability` — a Laya-specific extra that Jev clients ignore.
@@ -310,7 +310,7 @@ Two routes serve the UI and are **outside the Jev contract**:
 
 | route | returns |
 |---|---|
-| `GET /demo` | `index.html` |
+| `GET /demo` | `demo.html` |
 | `GET /ui/presets` | the five examples — `triage`, `router`, `moderation`, `guard`, `email` — each `{state, questions}` |
 
 `GET /` is a health check, also outside the Jev contract: `{"status": "ok", "model": "laya", "ui":
