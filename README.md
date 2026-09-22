@@ -47,6 +47,10 @@ cd laya-server
   hand off to the `laya-server` CLI — so every platform takes the same code path.
 - The default action is `serve`: download the weights if needed, start on the first free port from
   8000, and open the UI. Ctrl-C stops it.
+- On a bare interactive run it offers once to install `laya-server` on your PATH, so later runs can
+  skip the wrapper. Answer either way and it still starts the server; with arguments, or when the
+  output is piped, it never asks. The install is editable, so it follows this checkout — remove it
+  with `uv tool uninstall laya-server`.
 - Arguments pass straight through, so the wrapper is also how you pick a model:
 
 ```sh
@@ -266,9 +270,14 @@ Weights live in the shared Hugging Face cache, not in the repo:
 
 ```sh
 uv sync
-uv run python -m server serve          # same as the laya-server script
+uv run laya-server serve               # the CLI, without the wrapper
+.venv/bin/laya-server serve            # the same entry point, directly
+uv run python -m server serve          # module form
 uv run python -m uvicorn server.api:app --port 8000   # bare ASGI app, default checkpoint
 ```
+
+Once installed with `uv tool install --editable .` — which `./start.sh` offers on a bare run — plain
+`laya-server` works from any directory.
 
 ## Files
 

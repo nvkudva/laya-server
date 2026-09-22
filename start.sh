@@ -16,4 +16,22 @@ fi
 echo "==> Setting up Python 3.12 and dependencies"
 uv sync --quiet
 
+# Offer the global install, but only on a bare interactive run: with arguments this script is doing
+# a specific job (often backgrounded, or in CI), and a prompt there would hang waiting for a key.
+# --editable keeps the installed command following this checkout instead of freezing a copy of it.
+if [ $# -eq 0 ] && [ -t 0 ] && ! uv tool list 2>/dev/null | grep -q '^laya-server'; then
+  printf '\nInstall laya-server globally, so you can run it from anywhere? [y/N] '
+  read -r reply || reply=""
+  case "$reply" in
+    [yY]*)
+      if uv tool install --editable . --quiet; then
+        echo "==> Installed. From now on just run:  laya-server"
+      else
+        echo "==> Install failed; carrying on with this checkout."
+      fi
+      ;;
+  esac
+  echo
+fi
+
 exec uv run laya-server "$@"
